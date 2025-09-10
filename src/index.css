@@ -2,57 +2,61 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Dashboard Design System - Velonic-inspired */
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* Core Background & Text */
+    --background: 210 17% 96%;
+    --foreground: 220 39% 11%;
 
+    /* Card System */
     --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card-foreground: 220 39% 11%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    /* Dashboard Sidebar */
+    --dashboard-sidebar: 220 39% 11%;
+    --dashboard-sidebar-foreground: 210 17% 96%;
+    --dashboard-sidebar-hover: 220 35% 15%;
+    --dashboard-sidebar-active: 180 77% 47%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    /* Metric Cards */
+    --metric-visits: 340 75% 68%;
+    --metric-revenue: 258 90% 66%;
+    --metric-orders: 197 71% 59%;
+    --metric-users: 159 64% 52%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    /* Chart Colors */
+    --chart-primary: 180 77% 47%;
+    --chart-secondary: 220 39% 11%;
+    --chart-accent: 197 71% 59%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    /* Interactive States */
+    --hover-overlay: 0 0% 0% / 0.05;
+    --shadow-soft: 220 13% 91% / 0.3;
+    --shadow-elevated: 220 13% 91% / 0.15;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    /* Input & Search */
+    --search-bg: 210 17% 92%;
+    --search-border: 210 16% 82%;
 
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    /* Legacy tokens for compatibility */
+    --primary: 180 77% 47%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 17% 92%;
+    --secondary-foreground: 220 39% 11%;
+    --muted: 210 17% 92%;
+    --muted-foreground: 220 13% 46%;
+    --accent: 197 71% 59%;
+    --accent-foreground: 0 0% 100%;
+    --border: 210 16% 82%;
+    --input: 210 16% 82%;
+    --ring: 180 77% 47%;
+    --radius: 0.75rem;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
-
-    --radius: 0.5rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Animation Variables */
+    --sidebar-transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --card-hover: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .dark {

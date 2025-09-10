@@ -47,6 +47,28 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // Dashboard specific colors
+        dashboard: {
+          sidebar: "hsl(var(--dashboard-sidebar))",
+          "sidebar-foreground": "hsl(var(--dashboard-sidebar-foreground))",
+          "sidebar-hover": "hsl(var(--dashboard-sidebar-hover))",
+          "sidebar-active": "hsl(var(--dashboard-sidebar-active))",
+        },
+        metric: {
+          visits: "hsl(var(--metric-visits))",
+          revenue: "hsl(var(--metric-revenue))",
+          orders: "hsl(var(--metric-orders))",
+          users: "hsl(var(--metric-users))",
+        },
+        chart: {
+          primary: "hsl(var(--chart-primary))",
+          secondary: "hsl(var(--chart-secondary))",
+          accent: "hsl(var(--chart-accent))",
+        },
+        search: {
+          bg: "hsl(var(--search-bg))",
+          border: "hsl(var(--search-border))",
+        },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",
           foreground: "hsl(var(--sidebar-foreground))",
