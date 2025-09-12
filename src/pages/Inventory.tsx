@@ -70,7 +70,6 @@ const Inventory: React.FC = () => {
           </CardContent>
         </Card>
       </div>
-
       {/* Inventory Table */}
       <Card>
         <CardHeader>

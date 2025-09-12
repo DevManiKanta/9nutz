@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
+// import {IMAGES} from '@/assets/Images';
 import {
   BarChart3,
   Package,
@@ -15,7 +16,6 @@ interface SidebarProps {
   isCollapsed: boolean;
   onToggle: () => void;
 }
-
 const navigationItems = [
   { id: 'dashboard', label: 'Dashboard', path: '/', icon: BarChart3 },
   { id: 'products', label: 'Products', path: '/products', icon: Package },
@@ -23,10 +23,8 @@ const navigationItems = [
   { id: 'employees', label: 'Employees', path: '/employees', icon: Users },
   { id: 'inventory', label: 'Inventory Management', path: '/inventory', icon: ClipboardList },
 ];
-
 export const DashboardSidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
   const location = useLocation();
-
   return (
     <div
       className={cn(
@@ -34,15 +32,18 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle
         isCollapsed ? "w-16" : "w-64"
       )}
     >
-      {/* Header */}
       <div className="h-16 flex items-center justify-between px-4 border-b border-dashboard-sidebar-hover">
         {!isCollapsed && (
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-chart-primary rounded-lg flex items-center justify-center">
-              <BarChart3 className="h-5 w-5 text-white" />
-            </div>
-            <span className="font-semibold text-lg">Velonic</span>
-          </div>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center overflow-hidden">
+        {/* <img
+          src={IMAGES.logo}
+          alt="Logo"
+          className="w-full h-full object-contain w-8 h-8"
+        /> */}
+      </div>
+      <h1 className="text-xl font-semibold">BLK Business solutions pvt ltd</h1>
+    </div>
         )}
         <button
           onClick={onToggle}
@@ -52,23 +53,14 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle
           {isCollapsed ? <Menu className="h-5 w-5" /> : <X className="h-5 w-5" />}
         </button>
       </div>
-
       {/* Navigation */}
       <div className="flex-1 py-4">
         <div className="px-3 mb-4">
-          <p className={cn(
-            "text-xs font-medium text-dashboard-sidebar-foreground/60 uppercase tracking-wide",
-            isCollapsed ? "hidden" : "block"
-          )}>
-            Main
-          </p>
         </div>
-
         <nav className="space-y-1 px-2">
           {navigationItems.map((item) => {
             const Icon = item.icon;
             const isActive = location.pathname === item.path;
-
             return (
               <Link
                 key={item.id}
@@ -97,7 +89,6 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle
           })}
         </nav>
       </div>
-
       {/* User Section */}
       {!isCollapsed && (
         <div className="p-4 border-t border-dashboard-sidebar-hover">
@@ -106,7 +97,7 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle
               <span className="text-sm font-medium text-white">T</span>
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-dashboard-sidebar-foreground">Thomson</p>
+              <p className="text-sm font-medium text-dashboard-sidebar-foreground">ManiKanta</p>
               <p className="text-xs text-dashboard-sidebar-foreground/60 truncate">Admin</p>
             </div>
           </div>

@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Dashboard Design System - Velonic-inspired */
-
 @layer base {
   :root {
     /* Core Background & Text */
