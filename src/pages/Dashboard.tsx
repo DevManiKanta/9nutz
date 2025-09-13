@@ -2,18 +2,15 @@ import React from 'react';
 import { MetricCard } from '@/components/MetricCard';
 import { WeeklyChart } from '@/components/WeeklyChart';
 import { YearlyChart } from '@/components/YearlyChart';
-import { Eye, DollarSign, ShoppingCart, Users } from 'lucide-react';
+import { Eye, IndianRupee, ShoppingCart, Users } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
   return (
     <div className="space-y-8">
-      {/* Welcome Section */}
       <div>
         <h1 className="text-3xl font-bold text-foreground mb-2">Welcome!</h1>
         <p className="text-muted-foreground">Here's what's happening with your business today.</p>
       </div>
-
-      {/* Metric Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <MetricCard
           title="Daily Visits"
@@ -26,11 +23,11 @@ const Dashboard: React.FC = () => {
         />
         <MetricCard
           title="Revenue"
-          value="$9,254.62"
+          value="9,254.62"
           change="18.25%"
           changeType="positive"
           period="Since last month"
-          icon={<DollarSign className="h-8 w-8" />}
+          icon={<IndianRupee className="h-8 w-8" />}
           variant="revenue"
         />
         <MetricCard

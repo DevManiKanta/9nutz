@@ -9,7 +9,10 @@ import Products from "@/pages/Products";
 import RouteMap from "@/pages/RouteMap";
 import Employees from "@/pages/Employees";
 import Inventory from "@/pages/Inventory";
+import Franchise from "@/pages/Franchise";
+import Customer from "@/pages/Customer";
 import NotFound from "./pages/NotFound";
+
 
 const queryClient = new QueryClient();
 
@@ -43,6 +46,16 @@ const App = () => (
           <Route path="/inventory" element={
             <DashboardLayout>
               <Inventory />
+            </DashboardLayout>
+          } />
+          <Route path="/franchise" element={
+            <DashboardLayout>
+              <Franchise />
+            </DashboardLayout>
+          } />
+          <Route path="/customer" element={
+            <DashboardLayout>
+              <Customer />
             </DashboardLayout>
           } />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
