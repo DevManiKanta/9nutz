@@ -26,23 +26,19 @@ const initialProducts: Product[] = [
 
 const API_BASE = "http://localhost:4000/api";
 
-const imageUrls = [
-   "https://www.freepnglogos.com/uploads/visa-card-logo-9.png", // Visa logo
-  "https://picsum.photos/seed/mobile-phone-1/600/400",         // Modern smartphone
-  "https://picsum.photos/seed/laptop-1/600/400",               // Laptop
-  "https://picsum.photos/seed/tech-1/600/400",                 // Tech setup
-  "https://picsum.photos/seed/computer-1/600/400",             // Desktop computer
-  "https://picsum.photos/seed/device-1/600/400"             
-];
-
 const Products: React.FC = () => {
   const [products, setProducts] = useState<Product[]>(initialProducts);
 
-  // drawer state
+  // Add Product drawer state
   const [isOpen, setIsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
-  // form state
+  // View Details drawer state
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewMounted, setViewMounted] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // form state (for add)
   const [form, setForm] = useState({
     name: "",
     price: "",
@@ -55,7 +51,7 @@ const Products: React.FC = () => {
   });
   const [errors, setErrors] = useState<Partial<Record<keyof typeof form, string>>>({});
 
-  // submitting state
+  // submitting / loading
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -64,7 +60,10 @@ const Products: React.FC = () => {
   const addBtnRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLDivElement | null>(null);
 
-  // mount/unmount drawer so exit animation can run
+  // view drawer ref (for focus trap)
+  const viewDrawerRef = useRef<HTMLDivElement | null>(null);
+
+  // mount/unmount add drawer so exit animation can run
   useEffect(() => {
     if (isOpen) {
       setIsMounted(true);
@@ -81,7 +80,19 @@ const Products: React.FC = () => {
     }
   }, [isOpen]);
 
-  // keyboard handling + focus trap
+  // mount/unmount view drawer similar to add drawer
+  useEffect(() => {
+    if (viewOpen) {
+      setViewMounted(true);
+      document.body.style.overflow = "hidden";
+    } else {
+      const t = setTimeout(() => setViewMounted(false), 300);
+      document.body.style.overflow = "";
+      return () => clearTimeout(t);
+    }
+  }, [viewOpen]);
+
+  // keyboard handling + focus trap for add drawer
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsOpen(false);
@@ -106,6 +117,31 @@ const Products: React.FC = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, [isOpen]);
 
+  // keyboard handling + focus trap for view drawer
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setViewOpen(false);
+
+      if (e.key === "Tab" && viewOpen && viewDrawerRef.current) {
+        const focusable = viewDrawerRef.current.querySelectorAll<HTMLElement>(
+          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
+        );
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    if (viewOpen) window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [viewOpen]);
+
   // --------- Fetch initial products from API ----------
   const fetchProducts = async () => {
     setIsLoading(true);
@@ -123,7 +159,6 @@ const Products: React.FC = () => {
         nextId.current = Math.max(nextId.current, maxId + 1);
       }
     } catch (err) {
-      console.error("Network error fetching products:", err);
       toast.error("Network error while loading products");
     } finally {
       setIsLoading(false);
@@ -159,6 +194,26 @@ const Products: React.FC = () => {
       active: true,
     });
     setErrors({});
+  };
+
+  // handle image upload (file -> base64)
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // optional: limit size (5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      toast.error("Image too large (max 5MB)");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setForm((f) => ({ ...f, image: reader.result as string }));
+      setErrors((err) => ({ ...err, image: undefined }));
+    };
+    reader.readAsDataURL(file);
   };
 
   // Unified submit: validates, posts, updates UI
@@ -241,7 +296,7 @@ const Products: React.FC = () => {
           sku: payload.sku,
           stock: payload.stock,
           description: payload.description,
-          image: "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop",
+          image: payload.image || "https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=400&h=300&fit=crop",
           active: payload.active,
         };
         setProducts((p) => [localProduct, ...p]);
@@ -264,20 +319,28 @@ const Products: React.FC = () => {
     setErrors((err) => ({ ...err, [key]: undefined }));
   };
 
+  // Open view drawer for a specific product
+  const openView = (product: Product) => {
+    setSelectedProduct(product);
+    setViewOpen(true);
+  };
+
+  // Close view drawer
+  const closeView = () => {
+    setViewOpen(false);
+    // clear selection after animation
+    setTimeout(() => setSelectedProduct(null), 300);
+  };
+
   return (
     <>
-      {/* Toaster: keep in this component if not mounted globally */}
-      <Toaster position="top-right" />
-
+     <Toaster position="top-right" toastOptions={{ duration: 1000 }} />
       <div className="space-y-8">
-        {/* Header row */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Products</h1>
             <p className="text-muted-foreground">Manage your product catalog</p>
           </div>
-
-          {/* IMPORTANT: this button only opens the drawer (DO NOT call submit here) */}
           <Button
             ref={addBtnRef}
             className="bg-chart-primary hover:bg-chart-primary/90 flex items-center py-2 px-4 rounded-md shadow-sm"
@@ -321,7 +384,7 @@ const Products: React.FC = () => {
                     <span className="text-lg font-bold text-chart-primary">{product.price}</span>
                   </div>
 
-                  <Button variant="outline" className="w-full">
+                  <Button variant="outline" className="w-full" onClick={() => openView(product)}>
                     View Details
                   </Button>
                 </CardContent>
@@ -330,7 +393,7 @@ const Products: React.FC = () => {
           )}
         </div>
 
-        {/* Drawer */}
+        {/* Add Drawer */}
         {isMounted && (
           <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Add product drawer">
             {/* overlay (blur + dim) */}
@@ -374,7 +437,6 @@ const Products: React.FC = () => {
                   </div>
                 )}
 
-                {/* form submit now calls handleSubmit */}
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
@@ -445,14 +507,14 @@ const Products: React.FC = () => {
                       />
                       {errors.stock && <p className="text-xs text-red-500 mt-1">{errors.stock}</p>}
                     </div>
+
                     <div>
-                      <label className="block text-sm font-medium mb-1">Image URL</label>
+                      <label className="block text-sm font-medium mb-1">Upload Image</label>
                       <input
-                        aria-label="Image URL"
-                        className="block w-full border rounded-md p-2 focus:outline-none focus:ring border-muted"
-                        value={form.image}
-                        onChange={(e) => handleChange("image", e.target.value)}
-                        placeholder="Optional image URL"
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-chart-primary file:text-white hover:file:bg-chart-primary/90"
                       />
                     </div>
                   </div>
@@ -490,6 +552,93 @@ const Products: React.FC = () => {
                     </div>
                   </div>
                 </form>
+              </div>
+            </aside>
+          </div>
+        )}
+
+        {/* View Details Drawer */}
+        {viewMounted && (
+          <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="View product details drawer">
+            {/* overlay */}
+            <div
+              className={`fixed inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${
+                viewOpen ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
+              }`}
+              onClick={() => closeView()}
+              aria-hidden="true"
+            />
+
+            <aside
+              ref={viewDrawerRef}
+              className={`fixed top-0 right-0 h-screen bg-white dark:bg-slate-900 shadow-2xl overflow-auto rounded-l-2xl transform transition-transform duration-300 ease-in-out
+                md:w-96 w-full
+              `}
+              style={{ transform: viewOpen ? "translateX(0)" : "translateX(100%)" }}
+            >
+              {/* header */}
+              <div className="flex items-start justify-between p-6 border-b">
+                <div>
+                  <h3 className="text-xl font-semibold">Product Details</h3>
+                  <p className="text-sm text-muted-foreground">Details for the selected product</p>
+                </div>
+
+                <button
+                  onClick={() => closeView()}
+                  aria-label="Close drawer"
+                  className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-muted"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="p-6">
+                {selectedProduct?.image && (
+                  <div className="mb-4">
+                    <img src={selectedProduct.image} alt={selectedProduct.name} className="w-full h-44 object-cover rounded-md border" />
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Product Name</label>
+                    <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.name || "-"}</div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Price</label>
+                    <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.price || "-"}</div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Category</label>
+                    <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.category || "-"}</div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">SKU</label>
+                    <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.sku || "-"}</div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Stock</label>
+                    <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.stock ?? "-"}</div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Description</label>
+                    <div className="rounded-md border p-2 bg-gray-50 whitespace-pre-wrap">{selectedProduct?.description || "-"}</div>
+                  </div>
+
+                  <div className="flex items-center justify-between mt-4">
+                    <Button variant="ghost" onClick={() => closeView()}>
+                      Close
+                    </Button>
+                    <Button onClick={() => { /* optional: edit functionality */ }}>
+                      Edit
+                    </Button>
+                  </div>
+                </div>
               </div>
             </aside>
           </div>
