@@ -51,7 +51,7 @@ export const ForgotPasswordForm = () => {
               />
             </div>
             <Button type="submit" className="w-full h-11">
-              Send Reset Link
+              Send Otp
             </Button>
             <p className="text-sm text-center mt-2">
               Remember your password?{" "}

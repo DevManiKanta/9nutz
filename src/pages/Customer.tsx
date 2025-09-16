@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useState, useRef } from "react";
 import { Search, PlusCircle, Camera, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -31,13 +32,16 @@ export default function Customer(): JSX.Element {
     fridge: string;
     avgSales: string;
     smartPhoneUser: string;
+    // NEW: lat/lon strings (kept as string for flexible input)
+    latitude?: string;
+    longitude?: string;
   };
 
   type CustomerFormErrors = Partial<Record<keyof CustomerForm, string>>;
 
   const [errors, setErrors] = useState<CustomerFormErrors>({});
   const [form, setForm] = useState<CustomerForm>({
-    image:null,
+    image: null,
     photoPreview: "",
     state: "",
     district: "",
@@ -58,36 +62,19 @@ export default function Customer(): JSX.Element {
     fridge: "",
     avgSales: "",
     smartPhoneUser: "yes",
+    latitude: "",
+    longitude: "",
   });
-  console.log("TESTForm",form)
-  // sample customers (UI-only)
-  const [customers, setCustomers] = useState<any[]>([
-    {
-      id: "c1",
-      photoPreview:
-        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=400&auto=format&fit=crop",
-      state: "Telangana",
-      district: "Hyderabad",
-      taluk: "Medchal",
-      postal: "500039",
-      village: "Uppal",
-      shopType: "Shop",
-      shopName: "Ravi General Store",
-      customerName: "Ravi Kumar",
-      customerLocalName: "Ravi",
-      villageLocalName: "Uppal",
-      phone1: "9848012345",
-      phone2: "9000000000",
-      gst: "",
-      pan: "",
-      address: "12/A Main Road, Uppal",
-      landmark: "Near Bus Stop",
-      shopBreak: "30 mins",
-      fridge: "Yes",
-      avgSales: "1500",
-      smartPhoneUser: "yes",
-    },
-  ]);
+
+  // replaced static customers array with fetched data
+  const [customers, setCustomers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [loadingError, setLoadingError] = useState<string | null>(null);
+
+  const [geoLoading, setGeoLoading] = useState(false); // NEW: loading state for lat/lon lookup
+
+  // NEW: track currently editing customer's id (null when creating)
+  const [editingId, setEditingId] = useState<string | number | null>(null);
 
   const LABELS: Record<string, string> = {
     state: "State",
@@ -175,18 +162,95 @@ export default function Customer(): JSX.Element {
   };
   const SHOPTYPE_ID_MAP: Record<string, number> = { Shop: 1, Home: 2, Kirana: 3, Wholesale: 4, "Temporary Stall": 5 };
 
-   useEffect(()=>{
-         try {
-          const res =  fetch("http://192.168.29.102:5000/api/customers", {
-           method: "GET",
-            })
-          console.log("RES",res)
-            // setCustomers()
-         } catch (error) {
-           console.log("ERROR",error)
-          
-         }
-   },[])
+  // ---------- NEW: robust GET on mount ----------
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function safeReadResponseText(res: Response) {
+      try {
+        const t = await res.text();
+        return t || res.statusText || "Unknown error";
+      } catch {
+        return res.statusText || "Unknown error";
+      }
+    }
+
+    function normalizeRow(r: any) {
+      if (!r) return null;
+      return {
+        id: r.id ?? r._id ?? r.customer_id ?? r.uuid ?? String(Math.random()).slice(2),
+        photoPreview: r.photoPreview ?? r.photo_url ?? r.imageUrl ?? r.image ?? "",
+        imageUrl: r.photo_url ?? r.imageUrl,
+        state: r.state ?? r.state_name ?? "",
+        district: r.district ?? r.district_name ?? "",
+        taluk: r.taluk ?? r.taluk_name ?? "",
+        postal: r.pin ?? r.postal ?? r.postal_code ?? "",
+        village: r.village ?? r.village_name ?? "",
+        shopType: r.shop_type ?? r.shopType ?? "",
+        shopName: r.shop_name ?? r.shopName ?? "",
+        customerName: r.customer_name ?? r.customerName ?? "",
+        customerLocalName: r.customer_local_name ?? r.customerLocalName ?? "",
+        villageLocalName: r.village_local_name ?? r.villageLocalName ?? "",
+        phone1: r.phone ?? r.phone1 ?? "",
+        phone2: r.phone2 ?? "",
+        gst: r.gst_no ?? r.gst ?? "",
+        pan: r.pan_no ?? r.pan ?? "",
+        address: r.address ?? "",
+        landmark: r.landmark ?? "",
+        shopBreak: r.shop_break ?? r.shopBreak ?? "",
+        fridge: r.fridge ?? "",
+        avgSales: r.avg_sales ?? r.avgSales ?? "",
+        smartPhoneUser: r.smartphone_user ?? r.smartPhoneUser ?? "",
+        ...r,
+      };
+    }
+
+    const fetchCustomers = async () => {
+      setLoading(true);
+      setLoadingError(null);
+      try {
+        const res = await fetch("http://192.168.29.102:5000/api/customers", { signal: controller.signal });
+        if (!res.ok) {
+          const txt = await safeReadResponseText(res);
+          const msg = `Failed to load customers (${res.status}) — ${txt}`;
+          console.error(msg);
+          setLoadingError(msg);
+          toast.error("Unable to load customers. Check console for details.");
+          setCustomers([]);
+          return;
+        }
+
+        const body = await res.json().catch(() => null);
+
+        // Detect array in common payload shapes
+        let rows: any[] = [];
+        if (body?.rows && Array.isArray(body.rows)) rows = body.rows;
+        else if (body?.data && Array.isArray(body.data)) rows = body.data;
+        else if (body?.customers && Array.isArray(body.customers)) rows = body.customers;
+        else if (Array.isArray(body)) rows = body;
+        else {
+          // If API returns object with an inner property for items, log it for debugging.
+          console.warn("Unexpected customers payload shape:", body);
+        }
+
+        const normalized = rows.map((r) => normalizeRow(r)).filter(Boolean);
+        setCustomers(normalized);
+      } catch (err: any) {
+        if (err.name === "AbortError") return;
+        console.error("Network error fetching customers:", err);
+        setLoadingError("Network error fetching customers");
+        toast.error("Network error while loading customers");
+        setCustomers([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchCustomers();
+    return () => controller.abort();
+  }, []);
+  // ---------- end GET ----------
+
   // update select dependent lists
   useEffect(() => {
     if (!form.state) {
@@ -242,25 +306,25 @@ export default function Customer(): JSX.Element {
   }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-  const f = e.target.files?.[0] ?? null;
-  if (!f) return;
-  const okTypes = ["image/jpeg", "image/png", "image/webp"];
-  const maxMB = 5;
-  if (!okTypes.includes(f.type)) {
-    setErrors((p) => ({ ...p, photoFile: "Only JPG / PNG / WEBP allowed" }));
-    return;
+    const f = e.target.files?.[0] ?? null;
+    if (!f) return;
+    const okTypes = ["image/jpeg", "image/png", "image/webp"];
+    const maxMB = 5;
+    if (!okTypes.includes(f.type)) {
+      setErrors((p) => ({ ...p, photoFile: "Only JPG / PNG / WEBP allowed" }));
+      return;
+    }
+    if (f.size > maxMB * 1024 * 1024) {
+      setErrors((p) => ({ ...p, photoFile: `Image must be < ${maxMB}MB` }));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setForm((s) => ({ ...s, image: f, photoPreview: reader.result as string }));
+      setErrors((p) => ({ ...p, photoFile: undefined }));
+    };
+    reader.readAsDataURL(f);
   }
-  if (f.size > maxMB * 1024 * 1024) {
-    setErrors((p) => ({ ...p, photoFile: `Image must be < ${maxMB}MB` }));
-    return;
-  }
-  const reader = new FileReader();
-  reader.onload = () => {
-    setForm((s) => ({ ...s, image: f, photoPreview: reader.result as string }));
-    setErrors((p) => ({ ...p, photoFile: undefined }));
-  };
-  reader.readAsDataURL(f);
-}
 
   function openFileDialog() {
     fileInputRef.current?.click();
@@ -334,6 +398,10 @@ export default function Customer(): JSX.Element {
     const smartphoneFlag = f.smartPhoneUser === "yes" || f.smartPhoneUser === "1" ? "1" : "0";
     safeAppend("smartphone_user", smartphoneFlag);
 
+    // Optionally include lat/lon if present
+    safeAppend("latitude", f.latitude ?? "");
+    safeAppend("longitude", f.longitude ?? "");
+
     // Optional debug/test payload
     safeAppend(
       "testData",
@@ -346,7 +414,7 @@ export default function Customer(): JSX.Element {
     return fd;
   }
 
-  // submit handler
+  // submit handler (POST create or PUT update if editingId set)
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
@@ -359,7 +427,7 @@ export default function Customer(): JSX.Element {
     }
 
     const payload = buildApiFormDataSafe(form);
-    console.log("TESTPAYLOAD",payload)
+    console.log("TESTPAYLOAD", payload);
     // Debugging: iterate and log entries (files printed as File objects)
     try {
       console.group("FormData contents before send");
@@ -379,8 +447,11 @@ export default function Customer(): JSX.Element {
 
     try {
       // Use fetch and DO NOT set Content-Type header (browser will set the multipart boundary)
-      const res = await fetch("http://192.168.29.102:5000/api/customers", {
-        method: "POST",
+      const url = editingId ? `http://192.168.29.102:5000/api/customers/${editingId}` : "http://192.168.29.102:5000/api/customers";
+      const method = editingId ? "PUT" : "POST";
+
+      const res = await fetch(url, {
+        method,
         body: payload,
       });
 
@@ -399,8 +470,8 @@ export default function Customer(): JSX.Element {
             if (txt) errText = txt;
           } catch {}
         }
-        console.error("Failed to create customer:", errText);
-        toast.error(`Failed to create customer: ${errText}`);
+        console.error("Failed to save customer:", errText);
+        toast.error(`Failed to save customer: ${errText}`);
         return;
       }
 
@@ -412,33 +483,52 @@ export default function Customer(): JSX.Element {
         body = null;
       }
 
-      const created = (body && (body.row ?? body.data ?? body.customer ?? body)) || null;
+      const createdOrUpdated = (body && (body.row ?? body.data ?? body.customer ?? body)) || null;
 
-      if (created) {
-        setCustomers((prev) => [created, ...prev]);
-        toast.success("Customer created successfully");
+      if (editingId) {
+        // update local list: replace the item with server response if available, else merge form into existing
+        setCustomers((prev) =>
+          prev.map((item) => {
+            if (item.id === editingId) {
+              if (createdOrUpdated) {
+                // try to use returned object
+                return { ...item, ...createdOrUpdated };
+              }
+              // fallback: merge some fields from form
+              return { ...item, ...form, photoPreview: form.photoPreview || item.photoPreview };
+            }
+            return item;
+          })
+        );
+        toast.success("Customer updated successfully");
       } else {
-        const optimistic: any = {
-          id: `tmp-${Date.now()}`,
-          photoPreview: form.photoPreview || "",
-          shopName: form.shopName,
-          customerName: form.customerName,
-          phone1: form.phone1,
-          village: form.village,
-          district: form.district,
-        };
-        setCustomers((prev) => [optimistic, ...prev]);
-        console.warn("API did not return created object, added optimistic item", body);
-        toast.success("Customer added (optimistic)");
+        if (createdOrUpdated) {
+          setCustomers((prev) => [createdOrUpdated, ...prev]);
+        } else {
+          const optimistic: any = {
+            id: `tmp-${Date.now()}`,
+            photoPreview: form.photoPreview || "",
+            shopName: form.shopName,
+            customerName: form.customerName,
+            phone1: form.phone1,
+            village: form.village,
+            district: form.district,
+          };
+          setCustomers((prev) => [optimistic, ...prev]);
+          console.warn("API did not return created object, added optimistic item", body);
+        }
+        toast.success("Customer created successfully");
       }
 
+      // reset drawer + editing state
       setDrawerOpen(false);
       setErrors({});
-      console.log("Create response:", body);
+      setEditingId(null);
+      console.log("Save response:", body);
     } catch (err: any) {
-      console.error("Network / unexpected error creating customer:", err);
+      console.error("Network / unexpected error saving customer:", err);
       // If CORS/preflight blocked the request you'll see a TypeError here
-      toast.error("Network error while creating customer. Please try again.");
+      toast.error("Network error while saving customer. Please try again.");
     }
   }
 
@@ -453,6 +543,89 @@ export default function Customer(): JSX.Element {
       String(c.district || "").toLowerCase().includes(q)
     );
   });
+
+  // ------------------ NEW: reverse-geocoding from lat/lon ------------------
+  const handleLookupFromLatLon = async () => {
+    const lat = (form.latitude ?? "").trim();
+    const lon = (form.longitude ?? "").trim();
+
+    if (!lat || !lon) {
+      toast.error("Please enter both latitude and longitude.");
+      return;
+    }
+
+    const latNum = Number(lat);
+    const lonNum = Number(lon);
+    if (Number.isNaN(latNum) || Number.isNaN(lonNum) || latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
+      toast.error("Please enter valid numeric latitude and longitude values.");
+      return;
+    }
+
+    setGeoLoading(true);
+    toast.loading("Looking up address from coordinates...", { id: "geo" });
+
+    const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
+      latNum
+    )}&lon=${encodeURIComponent(lonNum)}&addressdetails=1`;
+
+    try {
+      const r = await fetch(nominatimUrl, {
+        headers: {
+          Accept: "application/json",
+        },
+      });
+
+      if (!r.ok) {
+        throw new Error(`Reverse geocode failed (${r.status})`);
+      }
+
+      const data = await r.json();
+      const display = data.display_name ?? "";
+
+      if (display) {
+        setForm((s) => ({ ...s, address: display }));
+        toast.dismiss("geo");
+        toast.success("Address populated from coordinates");
+      } else {
+        toast.dismiss("geo");
+        toast.error("Could not determine address from given coordinates.");
+      }
+    } catch (err) {
+      console.error("Reverse geocode error:", err);
+      toast.dismiss("geo");
+      toast.error("Reverse geocoding failed. Please check your network or coordinates.");
+    } finally {
+      setGeoLoading(false);
+    }
+  };
+  // ----------------------------------------------------------------------
+
+  // ---------- DELETE API: call backend then update local state ----------
+  const handleDeleteApi = async (id: string | number) => {
+    if (!confirm("Delete this customer?")) return;
+    try {
+      const res = await fetch(`http://192.168.29.102:5000/api/customers/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        let errText = `Server error (${res.status})`;
+        try {
+          const errBody = await res.json();
+          if (errBody && (errBody.message || errBody.error || errBody.errors)) {
+            errText = errBody.message || errBody.error || JSON.stringify(errBody.errors);
+          }
+        } catch {}
+        throw new Error(errText);
+      }
+      // remove from UI on success
+      setCustomers((prev) => prev.filter((x) => x.id !== id));
+      toast.success("Customer deleted");
+    } catch (err: any) {
+      console.error("Delete error:", err);
+      toast.error("Failed to delete customer. Check console for details.");
+    }
+  };
+  // ----------------------------------------------------------------------
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -477,7 +650,40 @@ export default function Customer(): JSX.Element {
         </div>
 
         <div className="w-full md:w-auto flex justify-end">
-          <Button onClick={() => setDrawerOpen(true)} className="flex items-center gap-2" aria-haspopup="dialog">
+          <Button
+            onClick={() => {
+              // open drawer in create mode: clear editingId and form (keep behavior similar to original)
+              setEditingId(null);
+              setForm({
+                image: null,
+                photoPreview: "",
+                state: "",
+                district: "",
+                taluk: "",
+                postal: "",
+                village: "",
+                shopType: "Shop",
+                shopName: "",
+                customerName: "",
+                customerLocalName: "",
+                villageLocalName: "",
+                phone1: "",
+                phone2: "",
+                gst: "",
+                pan: "",
+                address: "",
+                shopBreak: "No Break",
+                fridge: "",
+                avgSales: "",
+                smartPhoneUser: "yes",
+                latitude: "",
+                longitude: "",
+              });
+              setDrawerOpen(true);
+            }}
+            className="flex items-center gap-2"
+            aria-haspopup="dialog"
+          >
             <PlusCircle className="w-4 h-4" />
             Add Customer
           </Button>
@@ -488,7 +694,17 @@ export default function Customer(): JSX.Element {
       <div className="bg-white rounded-xl p-6 shadow-sm border mb-6">
         <h2 className="text-xl font-semibold mb-6">Customer List</h2>
 
-        {filteredCustomers.length === 0 ? (
+        {loading ? (
+          <div className="py-8 text-center text-slate-500">Loading customers…</div>
+        ) : loadingError ? (
+          <div className="py-8 text-center">
+            <div className="text-red-600 mb-2">Failed to load customers</div>
+            <div className="text-sm text-slate-500 mb-4">{loadingError}</div>
+            <div>
+              <Button onClick={() => window.location.reload()}>Retry</Button>
+            </div>
+          </div>
+        ) : filteredCustomers.length === 0 ? (
           <div className="py-16 flex flex-col items-center justify-center text-center text-slate-400">
             <div className="w-20 h-20 rounded-full bg-slate-100 grid place-items-center mb-4">
               <Search size={28} />
@@ -531,7 +747,8 @@ export default function Customer(): JSX.Element {
                           type="button"
                           onClick={() => {
                             // populate form for editing; convert server shape if required
-                            setForm({ ...c, photoFile: null, photoPreview: c.photoPreview ?? "" });
+                            setForm((s) => ({ ...s, ...c, photoPreview: c.photoPreview ?? "" }));
+                            setEditingId(c.id); // NEW: mark editing id
                             setDrawerOpen(true);
                           }}
                           className="px-3 py-1 border rounded text-sm"
@@ -541,8 +758,8 @@ export default function Customer(): JSX.Element {
                         <button
                           type="button"
                           onClick={() => {
-                            if (!confirm("Delete this customer?")) return;
-                            setCustomers((prev) => prev.filter((x) => x.id !== c.id));
+                            // call API delete
+                            handleDeleteApi(c.id);
                           }}
                           className="px-3 py-1 rounded bg-red-500 text-white text-sm"
                         >
@@ -570,9 +787,16 @@ export default function Customer(): JSX.Element {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 id="add-customer-title" className="text-2xl font-semibold">
-                Add Customer
+                {editingId ? "Edit Customer" : "Add Customer"}
               </h3>
-              <button onClick={() => setDrawerOpen(false)} className="p-2 rounded hover:bg-slate-100" type="button">
+              <button
+                onClick={() => {
+                  setDrawerOpen(false);
+                  setEditingId(null);
+                }}
+                className="p-2 rounded hover:bg-slate-100"
+                type="button"
+              >
                 <X size={20} />
               </button>
             </div>
@@ -613,10 +837,10 @@ export default function Customer(): JSX.Element {
                       >
                         <Camera size={16} /> Upload
                       </button>
-                      {form.photoFile && (
+                      {form.image && (
                         <button
                           type="button"
-                          onClick={() => setForm((s) => ({ ...s, photoFile: null, photoPreview: "" }))}
+                          onClick={() => setForm((s) => ({ ...s, image: null, photoPreview: "" }))}
                           className="mt-2 w-full px-4 py-2 border rounded"
                         >
                           Remove
@@ -763,30 +987,77 @@ export default function Customer(): JSX.Element {
                       {errors.pan && <p className="text-red-500 text-sm">{errors.pan}</p>}
                     </div>
 
+                    {/* NEW: Latitude & Longitude + Lookup button */}
                     <div className="md:col-span-3">
                       <label className="block text-sm text-slate-600">Address</label>
-                      <input name="address" value={form.address} onChange={handleChange} placeholder="Enter address" className="w-full p-3 border rounded" />
+
+                      <div className="mt-1 grid grid-cols-1 gap-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            name="latitude"
+                            value={form.latitude}
+                            onChange={handleChange}
+                            placeholder="Latitude (e.g. 17.3850)"
+                            className="block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <input
+                            name="longitude"
+                            value={form.longitude}
+                            onChange={handleChange}
+                            placeholder="Longitude (e.g. 78.4867)"
+                            className="block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div className="flex gap-2">
+                          <input
+                            name="address"
+                            value={form.address}
+                            onChange={handleChange}
+                            placeholder="Enter address or use Lookup"
+                            className="flex-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                          <div className="w-36 flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={handleLookupFromLatLon}
+                              className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md border ${
+                                geoLoading ? "bg-gray-100" : "bg-white hover:bg-gray-50"
+                              }`}
+                              disabled={geoLoading}
+                            >
+                              {geoLoading ? "Looking…" : "Lookup"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
                       {errors.address && <p className="text-red-500 text-sm">{errors.address}</p>}
+                      <p className="text-xs text-gray-400 mt-1">
+                        Enter latitude and longitude, then click <strong>Lookup</strong> to auto-fill the address via reverse geocoding.
+                      </p>
                     </div>
 
-                    <div>
-                      <label className="block text-sm text-slate-600">Shop Break</label>
-                      <select name="shopBreak" value={form.shopBreak} onChange={handleChange} className="w-full p-3 border rounded bg-slate-50">
-                        <option value="No Break">No Break</option>
-                        <option value="30 mins">30 mins</option>
-                        <option value="1 hour">1 hour</option>
-                      </select>
-                      {errors.shopBreak && <p className="text-red-500 text-sm">{errors.shopBreak}</p>}
-                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm text-slate-600">Shop Break</label>
+                        <select name="shopBreak" value={form.shopBreak} onChange={handleChange} className="w-full p-3 border rounded bg-slate-50">
+                          <option value="No Break">No Break</option>
+                          <option value="30 mins">30 mins</option>
+                          <option value="1 hour">1 hour</option>
+                        </select>
+                        {errors.shopBreak && <p className="text-red-500 text-sm">{errors.shopBreak}</p>}
+                      </div>
 
-                    <div>
-                      <label className="block text-sm text-slate-600">Fridge</label>
-                      <select name="fridge" value={form.fridge} onChange={handleChange} className="w-full p-3 border rounded bg-slate-50">
-                        <option value="">Select</option>
-                        <option value="Yes">Yes</option>
-                        <option value="No">No</option>
-                      </select>
-                      {errors.fridge && <p className="text-red-500 text-sm">{errors.fridge}</p>}
+                      <div>
+                        <label className="block text-sm text-slate-600">Fridge</label>
+                        <select name="fridge" value={form.fridge} onChange={handleChange} className="w-full p-3 border rounded bg-slate-50">
+                          <option value="">Select</option>
+                          <option value="Yes">Yes</option>
+                          <option value="No">No</option>
+                        </select>
+                        {errors.fridge && <p className="text-red-500 text-sm">{errors.fridge}</p>}
+                      </div>
                     </div>
 
                     <div>
@@ -805,11 +1076,11 @@ export default function Customer(): JSX.Element {
                   </div>
 
                   <div className="mt-6 flex justify-start gap-3">
-                    <button type="button" onClick={() => { setDrawerOpen(false); setErrors({}); }} className="px-4 py-2 rounded border">
+                    <button type="button" onClick={() => { setDrawerOpen(false); setErrors({}); setEditingId(null); }} className="px-4 py-2 rounded border">
                       Cancel
                     </button>
                     <button type="submit" className="px-6 py-2 rounded bg-blue-600 hover:bg-blue-700 text-white">
-                      Save Customer
+                      {editingId ? "Update Customer" : "Save Customer"}
                     </button>
                   </div>
                 </form>
@@ -821,5 +1092,10 @@ export default function Customer(): JSX.Element {
     </div>
   );
 }
+
+
+
+
+
 
 
