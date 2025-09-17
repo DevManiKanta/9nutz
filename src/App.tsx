@@ -181,6 +181,22 @@ import DailyInventory from "./pages/DailyInventory";
 import SlocStock from "./pages/SlocStock";
 import Settlement from "./pages/Settlement";
 import PreShortSupply from "./pages/PreShortSupply";
+import GstCacheProfitability from "./pages/GstCacheProfitability";
+import GstReport from "./pages/GstReport";
+import GstProfitability from "./pages/GstProfitability";
+import GstCacheReport from "./pages/GstCacheReport";
+import NewVendor from "./pages/NewVendor";
+import VendorList from "./pages/VendorList";
+import NewRevisit from "./pages/NewRevisit";
+import RevisitList from "./pages/RevisitList";
+import CategoryManagement from "./pages/CategoryManagement";
+import MasterManagement from "./pages/MasterManagement";
+import RouteManagement from "./pages/RouteManagement";
+import AssetsManagement from "./pages/AssetsManagement";
+import ConsolidatedVehiclePay from "./pages/ConsolidatedVehiclePay";
+import RentVehiclePaymentsList from "./pages/RentVehiclePaymentsList";
+import VehiclePaymentsList from "./pages/VehiclePaymentsList";
+import ItUpdates from "./pages/ItUpdates";
 
 const queryClient = new QueryClient();
 
@@ -501,6 +517,180 @@ const App = () => (
                 <ProtectedRoute>
                   <DashboardLayout>
                     <PreShortSupply />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+
+             {/* ---------- GST routes (new) ---------- */}
+            <Route
+              path="/Gst/GstCacheProfitability"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <GstCacheProfitability />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/Gst/GstCacheReport"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <GstCacheReport />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/Gst/GstProfitability"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <GstProfitability />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="/Gst/GstReport"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <GstReport />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+            {/* ---------- end GST routes ---------- */}
+ 
+            {/* ---------- start VENDOR routes ---------- */}
+            <Route
+              path="/NewVendor"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <NewVendor />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="/VendorList"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <VendorList />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             
+           {/* ---------- end VENDOR routes ---------- */}
+
+            {/* ---------- start REVIST routes ---------- */}
+            <Route
+              path="/NewRevist"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <NewRevisit />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="/RevisitList"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <RevisitList />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+           {/* ---------- end REVISIT routes ---------- */}
+
+
+            {/* ---------- start MANAGEMENT routes ---------- */}
+            <Route
+              path="Management/AssetsManagement"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <AssetsManagement />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="Management/RouteManagement"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <RouteManagement />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="Management/MasterManagement"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <MasterManagement />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="Management/CategoryManagement"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <CategoryManagement />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+           {/* ---------- end MANAGEMENT routes ---------- */}
+            <Route
+              path="VehiclePayments/VehiclePaymentsList"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <VehiclePaymentsList />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="VehiclePayments/RentVehiclePaymentsList"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <RentVehiclePaymentsList />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="VehiclePayments/ConsolidatedVehiclePay"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <ConsolidatedVehiclePay />
+                  </DashboardLayout>
+                </ProtectedRoute>
+              }
+            />
+             <Route
+              path="/ItUpdates"
+              element={
+                <ProtectedRoute>
+                  <DashboardLayout>
+                    <ItUpdates />
                   </DashboardLayout>
                 </ProtectedRoute>
               }

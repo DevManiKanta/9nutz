@@ -174,7 +174,6 @@ export const LoginForm = () => {
       setIsLoading(false);
     }
   };
-
   return (
     <>
       <Toaster position="top-right" />
