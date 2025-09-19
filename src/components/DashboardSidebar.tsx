@@ -1128,7 +1128,6 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle
           <div className="flex items-center gap-3">{/* user area */}</div>
         </div>
       )}
-
       {/* scrollbar styling */}
       <style>{`
         .sidebar-scroll::-webkit-scrollbar { width: 8px; }

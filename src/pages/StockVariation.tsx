@@ -94,13 +94,11 @@ export default function StockVariation({ data }: { data?: StockRecord[] }) {
     });
     return Array.from(m.entries()).map(([sku, v]) => ({ sku, ...v }));
   }, [filtered]);
-
   return (
     <div className="bg-white rounded-lg shadow p-4 w-full">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
         <div>
           <h3 className="text-lg font-semibold">Stock Variation</h3>
-          <p className="text-sm text-slate-500">View stock changes over time and by category</p>
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">

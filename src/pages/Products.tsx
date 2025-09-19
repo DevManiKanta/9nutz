@@ -339,7 +339,6 @@ const Products: React.FC = () => {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Products</h1>
-            <p className="text-muted-foreground">Manage your product catalog</p>
           </div>
           <Button
             ref={addBtnRef}
@@ -463,7 +462,7 @@ const Products: React.FC = () => {
                         className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.price ? "border-red-400" : "border-muted"}`}
                         value={form.price}
                         onChange={(e) => handleChange("price", e.target.value)}
-                        placeholder="e.g. $99"
+                        placeholder="e.g. 99"
                       />
                       {errors.price && <p className="text-xs text-red-500 mt-1">{errors.price}</p>}
                     </div>
@@ -477,7 +476,7 @@ const Products: React.FC = () => {
                         className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.category ? "border-red-400" : "border-muted"}`}
                         value={form.category}
                         onChange={(e) => handleChange("category", e.target.value)}
-                        placeholder="e.g. Software"
+                        placeholder=""
                       />
                       {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
                     </div>

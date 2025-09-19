@@ -1449,15 +1449,17 @@ export default function Customer(): JSX.Element {
 
     // we still append friendly pin and text fields
     safeAppend("pin", f.postal ?? "");
-    safeAppend("shop_type_id", labelToIdEnhanced(f.shopType || "", SHOPTYPE_ID_MAP) || "");
+    // safeAppend("shop_type_id", labelToIdEnhanced(f.shopType || "", SHOPTYPE_ID_MAP) || "");
+    safeAppend("shop_type_id", f.shopType ?? "");
     safeAppend("gst_no", f.gst ?? "");
     safeAppend("pan_no", f.pan ?? "");
     safeAppend("address", f.address ?? "");
     safeAppend("shop_break", f.shopBreak ?? "");
     safeAppend("fridge", f.fridge ?? "");
     safeAppend("avg_sales", f.avgSales ?? "");
-    const smartphoneFlag = f.smartPhoneUser === "yes" || f.smartPhoneUser === "1" ? "1" : "0";
-    safeAppend("smartphone_user", smartphoneFlag);
+    // const smartphoneFlag = f.smartPhoneUser === "yes" || f.smartPhoneUser === "1" ? "1" : "0";
+    // safeAppend("smartphone_user", smartphoneFlag);
+    safeAppend("smartphone_user", f.smartPhoneUser ?? "no");
     safeAppend("latitude", f.latitude ?? "");
     safeAppend("longitude", f.longitude ?? "");
 
@@ -1949,20 +1951,19 @@ export default function Customer(): JSX.Element {
               <div className="flex-1">
                 <form onSubmit={handleSubmit}>
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="md:col-span-1">
-                      <label className="block text-sm text-slate-600">
-                        State <span className="text-red-500">*</span>
-                      </label>
-                      <select name="state" value={form.state} onChange={handleChange} className="w-full p-3 border rounded bg-slate-50">
-                        <option value="">Select state</option>
-                        {STATES.map((s) => (
-                          <option key={s} value={s}>
-                            {s}
-                          </option>
-                        ))}
-                      </select>
-                      {errors.state && <p className="text-red-500 text-sm">{errors.state}</p>}
-                    </div>
+                <div className="md:col-span-1">
+  <label className="block text-sm text-slate-600">
+    State <span className="text-red-500">*</span>
+  </label>
+  <input
+    name="state"
+    value={form.state}
+    onChange={handleChange}
+    placeholder="State"
+    className="w-full p-3 border rounded"
+  />
+  {errors.state && <p className="text-red-500 text-sm">{errors.state}</p>}
+</div>
 
                     {/* District text input */}
                     <div className="md:col-span-1">

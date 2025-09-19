@@ -18,7 +18,6 @@ const Inventory: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-foreground">Inventory Management</h1>
-          <p className="text-muted-foreground">Track and manage your stock levels</p>
         </div>
         <Button className="bg-chart-primary hover:bg-chart-primary/90">
           <Plus className="h-4 w-4 mr-2" />

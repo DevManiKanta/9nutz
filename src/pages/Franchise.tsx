@@ -921,7 +921,6 @@ const Franchise: React.FC = () => {
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl md:text-3xl font-semibold text-gray-800 truncate">Franchise</h1>
-          <p className="text-sm text-gray-500 mt-1">Manage franchise branches and view quick metrics</p>
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
