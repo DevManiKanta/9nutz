@@ -187,10 +187,10 @@ export const LoginForm = () => {
         <div className="relative z-10 w-full max-w-lg h-screen flex items-center p-6">
           <Card className="w-full h-[750px] shadow-2xl backdrop-blur-md bg-white/90 flex flex-col justify-center">
             <CardHeader className="text-center space-y-6">
-              <img src={IMAGES.logo} alt="Retail Logo" className="mx-auto w-20 h-20" style={{ borderRadius: "50%" }} />
+              {/* <img src={IMAGES.logo} alt="Retail Logo" className="mx-auto w-20 h-20" style={{ borderRadius: "50%" }} /> */}
               <div className="space-y-2">
-                <CardTitle className="text-2xl font-bold">BLK BUSINESS SOLUTIONS Pvt Ltd</CardTitle>
-                <CardTitle className="text-xl font-bold">Welcome Back</CardTitle>
+                {/* <CardTitle className="text-2xl font-bold">BLK BUSINESS SOLUTIONS Pvt Ltd</CardTitle> */}
+                {/* <CardTitle className="text-xl font-bold">Welcome Back</CardTitle> */}
               </div>
             </CardHeader>
 

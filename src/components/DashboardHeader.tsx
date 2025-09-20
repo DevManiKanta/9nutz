@@ -122,7 +122,7 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
       {/* Left: Logo + Search */}
       <div className="flex items-center gap-4 flex-1 max-w-3xl">
         <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
-          <img src={IMAGES.logo} alt="Logo" className="w-full h-full object-contain" />
+          {/* <img src={IMAGES.logo} alt="Logo" className="w-full h-full object-contain" /> */}
         </div>
 
         <div className="relative flex-1">
