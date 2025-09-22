@@ -11,6 +11,8 @@ import {
   Map,
   Users,
   ClipboardList,
+  Building2,
+  Repeat,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -50,9 +52,11 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
   const tabs = [
     { key: "dashboard", label: "Dashboard", path: "/dashboard", Icon: Home },
     { key: "products", label: "Products", path: "/products", Icon: Package },
-    { key: "routemap", label: "RouteMap", path: "/routemap", Icon: Map },
     { key: "employees", label: "Employees", path: "/employees", Icon: Users },
     { key: "inventory", label: "Inventory Management", path: "/inventory", Icon: ClipboardList },
+      // { key: "franchise", label: "Franchise", path: "/franchise", icon: Building2 },
+      // { key: "customer", label: "Customer", path: "/customer", icon: Users },
+      // { key: "StockVariation", label: "Expenses Summary", path: "/stockvariation", icon: Repeat },
   ];
 
   // close popovers on outside click and ESC
@@ -121,10 +125,9 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
     <header className="h-16 bg-white border-b border-gray-200 flex items-center justify-between px-6">
       {/* Left: Logo + Search */}
       <div className="flex items-center gap-4 flex-1 max-w-3xl">
-        <div className="w-12 h-12 flex items-center justify-center overflow-hidden">
-          {/* <img src={IMAGES.logo} alt="Logo" className="w-full h-full object-contain" /> */}
+        <div className="w-25 h-10 flex items-center justify-center overflow-hidden">
+          <img src={IMAGES.Nutz} alt="Logo" className="w-full h-full object-contain" />
         </div>
-
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
