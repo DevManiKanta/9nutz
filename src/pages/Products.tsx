@@ -5,16 +5,20 @@
 // import { Button } from "@/components/ui/button";
 // import { Plus, Package, X, RefreshCw, Trash2, Edit3 } from "lucide-react";
 // import toast, { Toaster } from "react-hot-toast";
-// import { deflateRawSync } from "zlib";
 
 // type Product = {
 //   id: string | number;
 //   name: string;
-//   price: string;
-//   discountPrice?: string;
-//   category: string; // displayed as string, but backend expects numeric category id
-//   gram?: string;
+//   price: string; // original price
+//   grams?: string;
+//   discount_amount?: string; // e.g. "200.00"
+//   discount_price?: string; // e.g. "800.00"
+//   image_url?: string; // full URL for image
+//   // legacy/compat
+//   category?: string;
 //   image?: string;
+//   discountPrice?: string; // kept for compatibility with existing code paths
+//   gram?: string;
 // };
 
 // const API_BASE = "http://192.168.1.6:8000/api"; // your base url
@@ -33,11 +37,12 @@
 //   // form state (for add/edit)
 //   const [form, setForm] = useState({
 //     name: "",
-//     gram: "",
-//     category: "", 
+//     grams: "",
+//     category: "",
 //     price: "",
-//     discountPrice: "",
-//     image: "",
+//     discount_amount: "",
+//     discount_price: "",
+//     image: "", // preview data-url or existing image_url
 //   });
 //   const [errors, setErrors] = useState<Partial<Record<keyof typeof form, string>>>({});
 //   // actual file object for upload (optional)
@@ -51,23 +56,60 @@
 //   const drawerRef = useRef<HTMLDivElement | null>(null);
 //   const viewDrawerRef = useRef<HTMLDivElement | null>(null);
 
-//   // normalization helper (handles different server shapes)
+//   // ---------------- Token helper ----------------
+//   const getToken = (): string | null => {
+//     try {
+//       return localStorage.getItem("token");
+//     } catch (err) {
+//       console.warn("Unable to read token from localStorage", err);
+//       return null;
+//     }
+//   };
+
+//   // normalization helper (map API shape to Product)
 //   function normalizeProduct(raw: any): Product {
 //     if (!raw) {
-//       return { id: `local-${Date.now()}`, name: "Untitled", price: "", category: "" };
+//       return { id: `local-${Date.now()}`, name: "Untitled", price: "" };
 //     }
+
 //     const id =
-//       raw.id ?? raw._id ?? raw.product_id ?? raw.productId ?? raw.uid ?? raw.uuid ?? raw.id_str ?? raw.idNumber;
-//     return {
+//       raw.id ??
+//       raw._id ??
+//       raw.product_id ??
+//       raw.productId ??
+//       raw.uid ??
+//       raw.uuid ??
+//       raw.id_str ??
+//       raw.idNumber;
+
+//     // prefer explicit API fields you showed: name, price, grams, discount_amount, discount_price, image_url
+//     const product: Product = {
 //       id: id ?? `local-${Date.now()}`,
-//       name: String(raw.name ?? raw.title ?? raw.productName ?? raw.product ?? "Untitled"),
-//       price: String(raw.price ?? raw.cost ?? raw.amount ?? ""),
-//       discountPrice:
-//         raw.discountPrice ?? raw.discount_price ?? raw.discount ?? raw.salePrice ?? undefined,
+//       name: String(raw.name ?? raw.title ?? raw.productName ?? "Untitled"),
+//       price: String(raw.price ?? raw.amount ?? raw.cost ?? ""),
+//       grams: raw.grams ?? raw.gram ?? raw.weight ?? raw.size ?? "",
+//       discount_amount:
+//         raw.discount_amount ??
+//         raw.discountAmount ??
+//         raw.discount_amount_formatted ??
+//         raw.discount_amount_str ??
+//         raw.discount_amount ??
+//         undefined,
+//       discount_price:
+//         raw.discount_price ??
+//         raw.discountPrice ??
+//         raw.discount_price_formatted ??
+//         raw.discount_price ??
+//         undefined,
+//       image_url: raw.image_url ?? raw.imageUrl ?? raw.image ?? raw.photo ?? undefined,
+//       // keep old keys too for compatibility with UI code that referenced them
 //       category: String(raw.category ?? raw.cat ?? raw.type ?? raw.category_id ?? ""),
-//       gram: String(raw.gram ?? raw.weight ?? raw.quantity ?? raw.size ?? ""),
-//       image: raw.image ?? raw.photo ?? raw.imageUrl ?? raw.img ?? undefined,
+//       image: raw.image ?? raw.image_url ?? undefined,
+//       discountPrice: raw.discount_price ?? raw.discountPrice ?? undefined,
+//       gram: raw.grams ?? raw.gram ?? undefined,
 //     };
+
+//     return product;
 //   }
 
 //   // Drawer mount/unmount
@@ -98,7 +140,7 @@
 //     }
 //   }, [viewOpen]);
 
-//   // keyboard/focus traps (kept)
+//   // keyboard/focus traps
 //   useEffect(() => {
 //     const onKey = (e: KeyboardEvent) => {
 //       if (e.key === "Escape") setIsOpen(false);
@@ -149,7 +191,21 @@
 //   const fetchProducts = async () => {
 //     setIsLoading(true);
 //     try {
-//       const res = await fetch(`${API_BASE}/admin/products/show`, { method: "GET" });
+//       const token = getToken();
+//       if (!token) {
+//         toast.error("Missing auth token. Please login.");
+//         setIsLoading(false);
+//         return;
+//       }
+
+//       const res = await fetch(`${API_BASE}/admin/products/show`, {
+//         method: "GET",
+//         headers: {
+//           Accept: "application/json",
+//           Authorization: `Bearer ${token}`,
+//         },
+//       });
+
 //       const raw = await (async () => {
 //         try {
 //           return await res.json();
@@ -157,14 +213,14 @@
 //           return null;
 //         }
 //       })();
-//       console.log("RAW",raw)
+
 //       if (!res.ok) {
 //         console.error("Failed to fetch products:", res.status, raw);
 //         toast.error(`Failed to load products (${res.status})`);
 //         return;
 //       }
 
-//       // server might return { data: [...] } or array directly
+//       // server might return array or { data: [...] } etc.
 //       let rows: any[] = [];
 //       if (Array.isArray(raw)) rows = raw;
 //       else if (Array.isArray(raw.data)) rows = raw.data;
@@ -188,18 +244,22 @@
 
 //   useEffect(() => {
 //     void fetchProducts();
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
 //   }, []);
 
+//   // Validation adjusted to new field names
 //   const validate = () => {
 //     const e: Partial<Record<keyof typeof form, string>> = {};
 //     if (!form.name.trim()) e.name = "Product name is required";
 //     if (!form.price.trim()) e.price = "Price is required";
 //     if (form.price && !/^[\d,.₹$€£]+$/.test(form.price.trim())) e.price = "Enter a valid price";
 //     if (!form.category.trim()) e.category = "Category is required";
-//     // category should be numeric id — warn if not numeric
 //     if (form.category && isNaN(Number(form.category))) e.category = "Category must be a number (category id)";
-//     if (form.discountPrice && !/^[\d,.₹$€£]+$/.test(form.discountPrice.trim())) {
-//       e.discountPrice = "Enter a valid discount price";
+//     if (form.discount_price && !/^[\d,.₹$€£]+$/.test(form.discount_price.trim())) {
+//       e.discount_price = "Enter a valid discount price";
+//     }
+//     if (form.discount_amount && !/^[\d,.₹$€£]+$/.test(form.discount_amount.trim())) {
+//       e.discount_amount = "Enter a valid discount amount";
 //     }
 //     setErrors(e);
 //     return Object.keys(e).length === 0;
@@ -208,10 +268,11 @@
 //   const resetForm = () => {
 //     setForm({
 //       name: "",
-//       gram: "",
+//       grams: "",
 //       category: "",
 //       price: "",
-//       discountPrice: "",
+//       discount_amount: "",
+//       discount_price: "",
 //       image: "",
 //     });
 //     setImageFile(null);
@@ -240,19 +301,25 @@
 //   // create product (POST /admin/products/add) — send FormData
 //   const createProduct = async (payload: Partial<Product>, file?: File | null) => {
 //     const fd = new FormData();
-//     // backend expects category to be a number in category list
 //     if (payload.name) fd.append("name", String(payload.name));
 //     if (payload.price) fd.append("price", String(payload.price));
-//     if (payload.discountPrice) fd.append("discount_price", String(payload.discountPrice));
-//     if (payload.gram) fd.append("grams", String(payload.gram));
-//     // category field name per your messages is 'category' (only number)
-//     if (payload.category !== undefined) fd.append("category", String(payload.category));
+//     if (payload.discount_price) fd.append("discount_price", String(payload.discount_price));
+//     if (payload.discount_amount) fd.append("discount_amount", String(payload.discount_amount));
+//     if (payload.grams) fd.append("grams", String(payload.grams));
+//     if (payload.category) fd.append("category", String(payload.category));
 //     if (file) fd.append("image", file);
+
+//     const token = getToken();
+//     if (!token) throw new Error("Missing auth token (please login)");
 
 //     const res = await fetch(`${API_BASE}/admin/products/add`, {
 //       method: "POST",
+//       headers: {
+//         Authorization: `Bearer ${token}`,
+//       },
 //       body: fd,
 //     });
+
 //     const body = await (async () => {
 //       try {
 //         return await res.json();
@@ -265,25 +332,32 @@
 //       const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
 //       throw new Error(msg);
 //     }
-//     // server may nest created product under data/product
 //     const createdRaw = body?.data ?? body?.product ?? body ?? null;
 //     return normalizeProduct(createdRaw);
 //   };
 
-//   // update product (POST /admin/products/update/:id) — server expects POST
+//   // update product (POST /admin/products/update/:id)
 //   const updateProduct = async (id: string | number, payload: Partial<Product>, file?: File | null) => {
 //     const fd = new FormData();
 //     if (payload.name !== undefined) fd.append("name", String(payload.name));
 //     if (payload.price !== undefined) fd.append("price", String(payload.price));
-//     if (payload.discountPrice !== undefined) fd.append("discount_price", String(payload.discountPrice));
-//     if (payload.gram !== undefined) fd.append("grams", String(payload.gram));
+//     if (payload.discount_price !== undefined) fd.append("discount_price", String(payload.discount_price));
+//     if (payload.discount_amount !== undefined) fd.append("discount_amount", String(payload.discount_amount));
+//     if (payload.grams !== undefined) fd.append("grams", String(payload.grams));
 //     if (payload.category !== undefined) fd.append("category", String(payload.category));
 //     if (file) fd.append("image", file);
 
+//     const token = getToken();
+//     if (!token) throw new Error("Missing auth token (please login)");
+
 //     const res = await fetch(`${API_BASE}/admin/products/update/${id}`, {
 //       method: "POST",
+//       headers: {
+//         Authorization: `Bearer ${token}`,
+//       },
 //       body: fd,
 //     });
+
 //     const body = await (async () => {
 //       try {
 //         return await res.json();
@@ -291,6 +365,7 @@
 //         return null;
 //       }
 //     })();
+
 //     if (!res.ok) {
 //       const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
 //       throw new Error(msg);
@@ -301,8 +376,15 @@
 
 //   // delete (DELETE /admin/products/delete/:id)
 //   const deleteProduct = async (id: string | number) => {
+//     const token = getToken();
+//     if (!token) throw new Error("Missing auth token (please login)");
+
 //     const res = await fetch(`${API_BASE}/admin/products/delete/${id}`, {
 //       method: "DELETE",
+//       headers: {
+//         Authorization: `Bearer ${token}`,
+//         Accept: "application/json",
+//       },
 //     });
 //     let body = null;
 //     try {
@@ -328,10 +410,12 @@
 //     const payload: Partial<Product> = {
 //       name: form.name.trim(),
 //       price: form.price.trim(),
-//       discountPrice: form.discountPrice?.trim() || undefined,
-//       category: form.category.trim(), // ensure it's string here; server expects numeric string
-//       gram: form.gram?.trim() || undefined,
-//       image: form.image?.trim() || undefined,
+//       discount_price: form.discount_price?.trim() || undefined,
+//       discount_amount: form.discount_amount?.trim() || undefined,
+//       grams: form.grams?.trim() || undefined,
+//       // category kept as string id
+//       category: form.category.trim() || undefined,
+//       image_url: form.image?.trim() || undefined,
 //     };
 
 //     setIsSubmitting(true);
@@ -394,11 +478,12 @@
 //     setEditingId(product.id);
 //     setForm({
 //       name: product.name || "",
-//       gram: product.gram || "",
-//       category: product.category || "",
-//       price: product.price || "",
-//       discountPrice: product.discountPrice || "",
-//       image: product.image || "",
+//       grams: product.grams ?? product.gram ?? "",
+//       category: product.category ?? "",
+//       price: product.price ?? "",
+//       discount_amount: product.discount_amount ?? "",
+//       discount_price: product.discount_price ?? product.discountPrice ?? "",
+//       image: product.image_url ?? product.image ?? "",
 //     });
 //     setImageFile(null); // if user wants to change image, they'll upload a new file
 //     setIsOpen(true);
@@ -462,7 +547,19 @@
 //               <Card key={String(product.id)} className="hover:shadow-xl transition-shadow transform hover:-translate-y-1">
 //                 <CardHeader className="pb-3">
 //                   <div className="w-full h-36 rounded-lg mb-3 overflow-hidden flex items-center justify-center bg-gradient-to-br from-chart-primary to-chart-accent">
-//                     {product.image ? (
+//                     {product.image_url ? (
+//                       // eslint-disable-next-line @next/next/no-img-element
+//                       <img
+//                         src={product.image_url}
+//                         alt={product.name}
+//                         className="w-full h-full object-cover"
+//                         onError={(e) => {
+//                           (e.currentTarget as HTMLImageElement).src =
+//                             "https://source.unsplash.com/featured/600x600/?grocery,food&sig=999";
+//                         }}
+//                       />
+//                     ) : product.image ? (
+//                       // fallback
 //                       // eslint-disable-next-line @next/next/no-img-element
 //                       <img
 //                         src={product.image}
@@ -484,8 +581,8 @@
 
 //                 <CardContent className="space-y-4">
 //                   <div className="flex items-center justify-between">
-//                     <span className="text-sm text-muted-foreground">Category</span>
-//                     <span className="text-sm font-medium">{product.category}</span>
+//                     <span className="text-sm text-muted-foreground">Grams</span>
+//                     <span className="text-sm font-medium">{product.grams ?? "-"}</span>
 //                   </div>
 
 //                   <div className="flex items-center justify-between">
@@ -493,12 +590,16 @@
 //                       <span className="text-sm text-muted-foreground">Price</span>
 //                       <div className="text-lg font-bold text-chart-primary">{product.price}</div>
 //                     </div>
-//                     {product.discountPrice && (
-//                       <div className="text-right">
-//                         <span className="text-sm text-muted-foreground block">Discount</span>
-//                         <div className="text-sm font-semibold text-rose-600">{product.discountPrice}</div>
+
+//                     <div className="text-right">
+//                       <span className="text-sm text-muted-foreground block">Discount</span>
+//                       <div className="text-sm font-semibold text-rose-600">
+//                         {product.discount_price ?? "-"}
 //                       </div>
-//                     )}
+//                       {product.discount_amount && (
+//                         <div className="text-xs text-muted-foreground">Saved: {product.discount_amount}</div>
+//                       )}
+//                     </div>
 //                   </div>
 
 //                   <div className="flex gap-2">
@@ -591,7 +692,7 @@
 //                         className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.price ? "border-red-400" : "border-muted"}`}
 //                         value={form.price}
 //                         onChange={(e) => handleChange("price", e.target.value)}
-//                         placeholder="e.g. ₹120"
+//                         placeholder="e.g. 1000.00"
 //                       />
 //                       {errors.price && <p className="text-xs text-red-500 mt-1">{errors.price}</p>}
 //                     </div>
@@ -605,45 +706,58 @@
 //                         className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.category ? "border-red-400" : "border-muted"}`}
 //                         value={form.category}
 //                         onChange={(e) => handleChange("category", e.target.value)}
-//                         placeholder="e.g. 3 (category id)"
+//                         placeholder="e.g. 6"
 //                       />
 //                       {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
 //                     </div>
 
 //                     <div>
-//                       <label className="block text-sm font-medium mb-1">Gram (weight)</label>
+//                       <label className="block text-sm font-medium mb-1">Grams</label>
 //                       <input
-//                         aria-label="Gram"
+//                         aria-label="Grams"
 //                         className="block w-full border rounded-md p-2 focus:outline-none focus:ring border-muted"
-//                         value={form.gram}
-//                         onChange={(e) => handleChange("gram", e.target.value)}
-//                         placeholder="e.g. 500g"
+//                         value={form.grams}
+//                         onChange={(e) => handleChange("grams", e.target.value)}
+//                         placeholder="e.g. 750"
 //                       />
 //                     </div>
 //                   </div>
 
 //                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
 //                     <div>
-//                       <label className="block text-sm font-medium mb-1">Discount Price</label>
+//                       <label className="block text-sm font-medium mb-1">Discount Amount</label>
 //                       <input
-//                         aria-label="Discount Price"
-//                         className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.discountPrice ? "border-red-400" : "border-muted"}`}
-//                         value={form.discountPrice}
-//                         onChange={(e) => handleChange("discountPrice", e.target.value)}
-//                         placeholder="e.g. ₹105"
+//                         aria-label="Discount Amount"
+//                         className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.discount_amount ? "border-red-400" : "border-muted"}`}
+//                         value={form.discount_amount}
+//                         onChange={(e) => handleChange("discount_amount", e.target.value)}
+//                         placeholder="e.g. 200.00"
 //                       />
-//                       {errors.discountPrice && <p className="text-xs text-red-500 mt-1">{errors.discountPrice}</p>}
+//                       {errors.discount_amount && <p className="text-xs text-red-500 mt-1">{errors.discount_amount}</p>}
 //                     </div>
 
 //                     <div>
-//                       <label className="block text-sm font-medium mb-1">Upload Image</label>
+//                       <label className="block text-sm font-medium mb-1">Discount Price</label>
 //                       <input
-//                         type="file"
-//                         accept="image/*"
-//                         onChange={handleImageUpload}
-//                         className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-chart-primary file:text-white hover:file:bg-chart-primary/90"
+//                         aria-label="Discount Price"
+//                         className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.discount_price ? "border-red-400" : "border-muted"}`}
+//                         value={form.discount_price}
+//                         onChange={(e) => handleChange("discount_price", e.target.value)}
+//                         placeholder="e.g. 800.00"
 //                       />
+//                       {errors.discount_price && <p className="text-xs text-red-500 mt-1">{errors.discount_price}</p>}
 //                     </div>
+//                   </div>
+
+//                   <div>
+//                     <label className="block text-sm font-medium mb-1">Upload Image</label>
+//                     <input
+//                       type="file"
+//                       accept="image/*"
+//                       onChange={handleImageUpload}
+//                       className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-chart-primary file:text-white hover:file:bg-chart-primary/90"
+//                     />
+//                     <p className="text-xs text-muted-foreground mt-2">If you don't upload an image, the product's existing image_url will stay as-is.</p>
 //                   </div>
 
 //                   <div className="flex items-center justify-between">
@@ -690,46 +804,13 @@
 //                   <h3 className="text-xl font-semibold">Product Details</h3>
 //                   <p className="text-sm text-muted-foreground">Details for the selected product</p>
 //                 </div>
-
-//                 <div className="flex items-center gap-2">
-//                   <button
-//                     onClick={() => {
-//                       if (selectedProduct) startEdit(selectedProduct);
-//                       setViewOpen(false);
-//                     }}
-//                     title="Edit"
-//                     aria-label="Edit product"
-//                     className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-muted"
-//                   >
-//                     <Edit3 className="h-5 w-5" />
-//                   </button>
-
-//                   <button
-//                     onClick={() => {
-//                       if (selectedProduct) handleDelete(selectedProduct.id);
-//                     }}
-//                     title="Delete"
-//                     aria-label="Delete product"
-//                     className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-muted"
-//                   >
-//                     <Trash2 className="h-5 w-5" />
-//                   </button>
-
-//                   <button
-//                     onClick={() => closeView()}
-//                     aria-label="Close drawer"
-//                     className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-muted"
-//                   >
-//                     <X className="h-5 w-5" />
-//                   </button>
-//                 </div>
 //               </div>
 
 //               <div className="p-6">
-//                 {selectedProduct?.image && (
+//                 {selectedProduct?.image_url && (
 //                   <div className="mb-4">
 //                     <img
-//                       src={selectedProduct.image}
+//                       src={selectedProduct.image_url}
 //                       alt={selectedProduct.name}
 //                       className="w-full h-44 object-cover rounded-md border"
 //                       onError={(e) => {
@@ -752,31 +833,23 @@
 
 //                   <div>
 //                     <label className="block text-sm font-medium mb-1">Discount Price</label>
-//                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.discountPrice || "-"}</div>
+//                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.discount_price || "-"}</div>
 //                   </div>
 
 //                   <div>
-//                     <label className="block text-sm font-medium mb-1">Category</label>
-//                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.category || "-"}</div>
+//                     <label className="block text-sm font-medium mb-1">Discount Amount</label>
+//                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.discount_amount || "-"}</div>
 //                   </div>
 
 //                   <div>
-//                     <label className="block text-sm font-medium mb-1">Gram</label>
-//                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.gram || "-"}</div>
+//                     <label className="block text-sm font-medium mb-1">Grams</label>
+//                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.grams || "-"}</div>
 //                   </div>
 
 //                   <div className="flex items-center justify-between mt-4">
 //                     <Button variant="ghost" onClick={() => closeView()}>
 //                       Close
 //                     </Button>
-//                     <div className="flex gap-2">
-//                       <Button onClick={() => { if (selectedProduct) startEdit(selectedProduct); }}>
-//                         Edit
-//                       </Button>
-//                       <Button variant="destructive" onClick={() => { if (selectedProduct) handleDelete(selectedProduct.id); }}>
-//                         Delete
-//                       </Button>
-//                     </div>
 //                   </div>
 //                 </div>
 //               </div>
@@ -788,7 +861,6 @@
 //   );
 // };
 // export default Products;
-
 import React, { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -798,22 +870,29 @@ import toast, { Toaster } from "react-hot-toast";
 type Product = {
   id: string | number;
   name: string;
-  price: string; // original price
+  price: string;
   grams?: string;
-  discount_amount?: string; // e.g. "200.00"
-  discount_price?: string; // e.g. "800.00"
-  image_url?: string; // full URL for image
-  // legacy/compat
+  discount_amount?: string;
+  discount_price?: string;
+  image_url?: string;
+  // stored category id as string
   category?: string;
   image?: string;
-  discountPrice?: string; // kept for compatibility with existing code paths
+  discountPrice?: string;
   gram?: string;
+};
+
+type CategoryItem = {
+  id: string;
+  name: string;
 };
 
 const API_BASE = "http://192.168.1.6:8000/api"; // your base url
 
 const Products: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<CategoryItem[]>([]);
+
   // Add/Edit Drawer state
   const [isOpen, setIsOpen] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -855,6 +934,26 @@ const Products: React.FC = () => {
     }
   };
 
+  // safe helper: add category to categories list (dedupe by id)
+  const addCategoryFromRaw = (rawCategory: any) => {
+    if (!rawCategory) return;
+    let id: string | null = null;
+    let name: string | null = null;
+
+    if (typeof rawCategory === "object") {
+      id = String(rawCategory.id ?? rawCategory._id ?? rawCategory.category_id ?? rawCategory.categoryId ?? null);
+      name = String(rawCategory.name ?? rawCategory.title ?? rawCategory.category_name ?? rawCategory.label ?? "");
+    } else if (rawCategory !== null && rawCategory !== undefined) {
+      id = String(rawCategory);
+    }
+
+    if (!id) return;
+    setCategories((prev) => {
+      if (prev.some((c) => String(c.id) === String(id))) return prev;
+      return [...prev, { id, name: name ?? id }];
+    });
+  };
+
   // normalization helper (map API shape to Product)
   function normalizeProduct(raw: any): Product {
     if (!raw) {
@@ -869,11 +968,27 @@ const Products: React.FC = () => {
       raw.uid ??
       raw.uuid ??
       raw.id_str ??
-      raw.idNumber;
+      raw.idNumber ??
+      `local-${Date.now()}`;
 
-    // prefer explicit API fields you showed: name, price, grams, discount_amount, discount_price, image_url
+    // extract category id safely (handles when category is an object or a simple id)
+    let categoryId = "";
+    const rawCategory = raw.category ?? raw.cat ?? raw.type ?? raw.category_id ?? raw.categoryId ?? null;
+    if (rawCategory != null) {
+      if (typeof rawCategory === "object") {
+        categoryId = String(
+          rawCategory.id ?? rawCategory._id ?? rawCategory.category_id ?? rawCategory.categoryId ?? ""
+        );
+      } else {
+        categoryId = String(rawCategory);
+      }
+    }
+
+    // If server provided category object, push it to categories list
+    if (rawCategory) addCategoryFromRaw(rawCategory);
+
     const product: Product = {
-      id: id ?? `local-${Date.now()}`,
+      id,
       name: String(raw.name ?? raw.title ?? raw.productName ?? "Untitled"),
       price: String(raw.price ?? raw.amount ?? raw.cost ?? ""),
       grams: raw.grams ?? raw.gram ?? raw.weight ?? raw.size ?? "",
@@ -882,17 +997,11 @@ const Products: React.FC = () => {
         raw.discountAmount ??
         raw.discount_amount_formatted ??
         raw.discount_amount_str ??
-        raw.discount_amount ??
         undefined,
       discount_price:
-        raw.discount_price ??
-        raw.discountPrice ??
-        raw.discount_price_formatted ??
-        raw.discount_price ??
-        undefined,
+        raw.discount_price ?? raw.discountPrice ?? raw.discount_price_formatted ?? undefined,
       image_url: raw.image_url ?? raw.imageUrl ?? raw.image ?? raw.photo ?? undefined,
-      // keep old keys too for compatibility with UI code that referenced them
-      category: String(raw.category ?? raw.cat ?? raw.type ?? raw.category_id ?? ""),
+      category: categoryId,
       image: raw.image ?? raw.image_url ?? undefined,
       discountPrice: raw.discount_price ?? raw.discountPrice ?? undefined,
       gram: raw.grams ?? raw.gram ?? undefined,
@@ -929,7 +1038,7 @@ const Products: React.FC = () => {
     }
   }, [viewOpen]);
 
-  // keyboard/focus traps
+  // keyboard/focus traps (unchanged)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setIsOpen(false);
@@ -1006,6 +1115,7 @@ const Products: React.FC = () => {
       if (!res.ok) {
         console.error("Failed to fetch products:", res.status, raw);
         toast.error(`Failed to load products (${res.status})`);
+        setIsLoading(false);
         return;
       }
 
@@ -1016,12 +1126,9 @@ const Products: React.FC = () => {
       else if (Array.isArray(raw.products)) rows = raw.products;
       else if (Array.isArray(raw.rows)) rows = raw.rows;
       else if (Array.isArray(raw.items)) rows = raw.items;
-      else if (raw && typeof raw === "object" && Object.keys(raw).length && raw.data && Array.isArray(raw.data)) rows = raw.data;
-      else {
-        if (raw && typeof raw === "object" && (raw.id || raw._id || raw.name)) rows = [raw];
-      }
+      else if (raw && typeof raw === "object" && (raw.id || raw._id || raw.name)) rows = [raw];
 
-      const normalized = rows.map(normalizeProduct);
+      const normalized = rows.map((r) => normalizeProduct(r));
       setProducts(normalized);
     } catch (err) {
       console.error("Network error fetching products:", err);
@@ -1042,8 +1149,14 @@ const Products: React.FC = () => {
     if (!form.name.trim()) e.name = "Product name is required";
     if (!form.price.trim()) e.price = "Price is required";
     if (form.price && !/^[\d,.₹$€£]+$/.test(form.price.trim())) e.price = "Enter a valid price";
+
+    // Validate category: if categories list exists, ensure a selected id is present. Otherwise require non-empty.
     if (!form.category.trim()) e.category = "Category is required";
-    if (form.category && isNaN(Number(form.category))) e.category = "Category must be a number (category id)";
+    if (form.category && isNaN(Number(form.category))) {
+      // allow numeric ids only
+      e.category = "Category must be a number (category id)";
+    }
+
     if (form.discount_price && !/^[\d,.₹$€£]+$/.test(form.discount_price.trim())) {
       e.discount_price = "Enter a valid discount price";
     }
@@ -1265,16 +1378,20 @@ const Products: React.FC = () => {
   const startEdit = (product: Product) => {
     setIsEdit(true);
     setEditingId(product.id);
+
+    // Ensure category is a string id. product.category should already be normalized to id.
+    const categoryVal = product.category ? String(product.category) : "";
+
     setForm({
       name: product.name || "",
       grams: product.grams ?? product.gram ?? "",
-      category: product.category ?? "",
+      category: categoryVal,
       price: product.price ?? "",
       discount_amount: product.discount_amount ?? "",
       discount_price: product.discount_price ?? product.discountPrice ?? "",
       image: product.image_url ?? product.image ?? "",
     });
-    setImageFile(null); // if user wants to change image, they'll upload a new file
+    setImageFile(null);
     setIsOpen(true);
   };
 
@@ -1337,7 +1454,6 @@ const Products: React.FC = () => {
                 <CardHeader className="pb-3">
                   <div className="w-full h-36 rounded-lg mb-3 overflow-hidden flex items-center justify-center bg-gradient-to-br from-chart-primary to-chart-accent">
                     {product.image_url ? (
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={product.image_url}
                         alt={product.name}
@@ -1348,8 +1464,6 @@ const Products: React.FC = () => {
                         }}
                       />
                     ) : product.image ? (
-                      // fallback
-                      // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={product.image}
                         alt={product.name}
@@ -1382,9 +1496,7 @@ const Products: React.FC = () => {
 
                     <div className="text-right">
                       <span className="text-sm text-muted-foreground block">Discount</span>
-                      <div className="text-sm font-semibold text-rose-600">
-                        {product.discount_price ?? "-"}
-                      </div>
+                      <div className="text-sm font-semibold text-rose-600">{product.discount_price ?? "-"}</div>
                       {product.discount_amount && (
                         <div className="text-xs text-muted-foreground">Saved: {product.discount_amount}</div>
                       )}
@@ -1488,15 +1600,33 @@ const Products: React.FC = () => {
 
                     <div>
                       <label className="block text-sm font-medium mb-1">
-                        Category (id) <span className="text-red-500">*</span>
+                        Category <span className="text-red-500">*</span>
                       </label>
-                      <input
-                        aria-label="Category"
-                        className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.category ? "border-red-400" : "border-muted"}`}
-                        value={form.category}
-                        onChange={(e) => handleChange("category", e.target.value)}
-                        placeholder="e.g. 6"
-                      />
+
+                      {categories.length > 0 ? (
+                        <select
+                          aria-label="Category"
+                          value={form.category}
+                          onChange={(e) => handleChange("category", e.target.value)}
+                          className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.category ? "border-red-400" : "border-muted"}`}
+                        >
+                          <option value="">-- Select category --</option>
+                          {categories.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name ?? c.id}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <input
+                          aria-label="Category"
+                          className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.category ? "border-red-400" : "border-muted"}`}
+                          value={form.category}
+                          onChange={(e) => handleChange("category", e.target.value)}
+                          placeholder="e.g. 6"
+                        />
+                      )}
+
                       {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
                     </div>
 
@@ -1593,39 +1723,6 @@ const Products: React.FC = () => {
                   <h3 className="text-xl font-semibold">Product Details</h3>
                   <p className="text-sm text-muted-foreground">Details for the selected product</p>
                 </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      if (selectedProduct) startEdit(selectedProduct);
-                      setViewOpen(false);
-                    }}
-                    title="Edit"
-                    aria-label="Edit product"
-                    className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-muted"
-                  >
-                    <Edit3 className="h-5 w-5" />
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      if (selectedProduct) handleDelete(selectedProduct.id);
-                    }}
-                    title="Delete"
-                    aria-label="Delete product"
-                    className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-muted"
-                  >
-                    <Trash2 className="h-5 w-5" />
-                  </button>
-
-                  <button
-                    onClick={() => closeView()}
-                    aria-label="Close drawer"
-                    className="inline-flex items-center justify-center h-10 w-10 rounded-md hover:bg-muted"
-                  >
-                    <X className="h-5 w-5" />
-                  </button>
-                </div>
               </div>
 
               <div className="p-6">
@@ -1668,18 +1765,15 @@ const Products: React.FC = () => {
                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.grams || "-"}</div>
                   </div>
 
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Category ID</label>
+                    <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.category || "-"}</div>
+                  </div>
+
                   <div className="flex items-center justify-between mt-4">
                     <Button variant="ghost" onClick={() => closeView()}>
                       Close
                     </Button>
-                    <div className="flex gap-2">
-                      <Button onClick={() => { if (selectedProduct) startEdit(selectedProduct); }}>
-                        Edit
-                      </Button>
-                      <Button variant="destructive" onClick={() => { if (selectedProduct) handleDelete(selectedProduct.id); }}>
-                        Delete
-                      </Button>
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1691,6 +1785,7 @@ const Products: React.FC = () => {
   );
 };
 export default Products;
+
 
 
 

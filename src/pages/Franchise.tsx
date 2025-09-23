@@ -1,575 +1,10 @@
 
-// import React, { useEffect, useState } from "react";
-// import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-// import { Button } from "@/components/ui/button";
-// import { PlusCircle, Building2, BarChart3, X, RefreshCw } from "lucide-react";
-// import toast, { Toaster } from "react-hot-toast";
-
-// type FranchiseForm = {
-//   franchise_name: string;
-//   location: string;
-//   owner_name: string;
-//   contact_number: string;
-//   email: string;
-//   status: "active" | "inactive";
-//   address: string;
-//   gst_tax_id?: string;
-//   bank_account?: string;
-//   latitude?: string;
-//   longitude?: string;
-// };
-
-// const initialForm: FranchiseForm = {
-//   franchise_name: "",
-//   location: "",
-//   owner_name: "",
-//   contact_number: "",
-//   email: "",
-//   status: "active",
-//   address: "",
-//   gst_tax_id: "",
-//   bank_account: "",
-//   latitude: "",
-//   longitude: "",
-// };
-
-// // your API base (already in your code)
-// const API_URL = "http://192.168.29.102:5000/api/franchises";
-
-// const Franchise: React.FC = () => {
-//   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-//   const [form, setForm] = useState<FranchiseForm>(initialForm);
-//   const [errors, setErrors] = useState<Partial<Record<keyof FranchiseForm, string>>>({});
-//   const [loading, setLoading] = useState(false); // submission loading
-//   const [geoLoading, setGeoLoading] = useState(false); // reverse geocode
-
-//   // list state (now fetched via GET)
-//   const [franchises, setFranchises] = useState<
-//     Array<{ id: number | string; franchise_name: string; location: string; owner_name: string; status: string }>
-//   >([]);
-//   const [listLoading, setListLoading] = useState<boolean>(false);
-//   const [listError, setListError] = useState<string | null>(null);
-
-//   // helper to open/close drawer
-//   const openDrawer = () => {
-//     setForm(initialForm);
-//     setErrors({});
-//     setIsDrawerOpen(true);
-//   };
-//   const closeDrawer = () => setIsDrawerOpen(false);
-
-//   const handleChange =
-//     (k: keyof FranchiseForm) =>
-//     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-//       const value = (e.target as HTMLInputElement).value;
-//       setForm((s) => ({ ...s, [k]: value }));
-//       setErrors((err) => ({ ...err, [k]: undefined }));
-//     };
-
-//   const validate = (): boolean => {
-//     const err: Partial<Record<keyof FranchiseForm, string>> = {};
-//     if (!form.franchise_name || !form.franchise_name.trim()) err.franchise_name = "Franchise name is required";
-//     if (!form.location || !form.location.trim()) err.location = "Location is required";
-//     if (!form.owner_name || !form.owner_name.trim()) err.owner_name = "Owner name is required";
-//     if (!form.contact_number || !form.contact_number.trim()) err.contact_number = "Contact number is required";
-//     if (form.contact_number && !/^\+?\d{7,15}$/.test(form.contact_number)) err.contact_number = "Invalid contact number";
-//     if (!form.email || !form.email.trim()) err.email = "Email is required";
-//     if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) err.email = "Invalid email";
-//     if (!form.address || !form.address.trim()) err.address = "Address is required";
-//     setErrors(err);
-//     return Object.keys(err).length === 0;
-//   };
-
-//   // ------------------ GET franchises from API ------------------
-//   const fetchFranchises = async (opts?: { showErrorToast?: boolean }) => {
-//     setListLoading(true);
-//     setListError(null);
-
-//     // allow token from localStorage if used
-//     const token = localStorage.getItem("token");
-
-//     const controller = new AbortController();
-//     const signal = controller.signal;
-
-//     try {
-//       const res = await fetch(API_URL, {
-//         method: "GET",
-//         headers: {
-//           "Content-Type": "application/json",
-//           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-//         },
-//         signal,
-//       });
-
-//       if (!res.ok) {
-//         let errTxt = `Failed to load (${res.status})`;
-//         try {
-//           const body = await res.json().catch(() => null);
-//           if (body && (body.message || body.error)) errTxt = body.message || body.error;
-//         } catch {}
-//         setListError(errTxt);
-//         if (opts?.showErrorToast !== false) toast.error(`Failed to load franchises: ${errTxt}`);
-//         // keep fallback empty list
-//         setFranchises([]);
-//         return;
-//       }
-
-//       const body = await res.json().catch(() => null);
-
-//       // the server shape may vary. try common shapes:
-//       let rows: any[] = [];
-//       if (Array.isArray(body)) rows = body;
-//       else if (Array.isArray(body.rows)) rows = body.rows;
-//       else if (Array.isArray(body.data)) rows = body.data;
-//       else if (Array.isArray(body.franchises)) rows = body.franchises;
-//       else if (Array.isArray(body.franchise)) rows = body.franchise;
-//       else if (body && body.data && Array.isArray(body.data.rows)) rows = body.data.rows;
-//       else rows = [];
-
-//       // normalize rows into the simple shape used by UI
-//       const normalized = rows.map((r: any, idx: number) => ({
-//         id: r.id ?? r._id ?? r.franchise_id ?? `srv-${idx}`,
-//         franchise_name: r.franchise_name ?? r.name ?? r.title ?? "Unnamed",
-//         location: r.location ?? r.address ?? r.city ?? "-",
-//         owner_name: r.owner_name ?? r.owner ?? r.contact_name ?? "-",
-//         status: (r.status ?? "active").toLowerCase(),
-//       }));
-
-//       setFranchises(normalized);
-//     } catch (err: any) {
-//       if (err?.name === "AbortError") {
-//         // ignore abort
-//         return;
-//       }
-//       console.error("Fetch franchises error:", err);
-//       setListError("Network error");
-//       toast.error("Network error while loading franchises");
-//       setFranchises([]);
-//     } finally {
-//       setListLoading(false);
-//     }
-
-//     // no explicit return of controller, we do not expose it here.
-//   };
-
-//   useEffect(() => {
-//     void fetchFranchises();
-//     // eslint-disable-next-line react-hooks/exhaustive-deps
-//   }, []);
-
-//   // ------------------ POST (create) franchise (your previous code, slightly adapted) ------------------
-//   const handleSubmit = async (e?: React.FormEvent) => {
-//     e?.preventDefault();
-//     if (!validate()) {
-//       toast.error("Please fix the highlighted errors and try again.");
-//       return;
-//     }
-
-//     const payload = {
-//       franchise_name: form.franchise_name.trim(),
-//       location: form.location.trim(),
-//       owner_name: form.owner_name.trim(),
-//       contact_number: form.contact_number.trim(),
-//       email: form.email.trim(),
-//       status: form.status,
-//       address: form.address.trim(),
-//       gst_tax_id: form.gst_tax_id?.trim() || null,
-//       bank_account: form.bank_account?.trim() || null,
-//       latitude: form.latitude?.trim() || null,
-//       longitude: form.longitude?.trim() || null,
-//     };
-
-//     const optimisticId = `tmp-${Date.now()}`;
-//     const optimisticItem = {
-//       id: optimisticId,
-//       franchise_name: payload.franchise_name,
-//       location: payload.location,
-//       owner_name: payload.owner_name,
-//       status: payload.status,
-//     };
-//     setFranchises((prev) => [optimisticItem, ...prev]);
-//     setIsDrawerOpen(false);
-//     setLoading(true);
-
-//     try {
-//       const token = localStorage.getItem("token");
-//       const res = await fetch(API_URL, {
-//         method: "POST",
-//         headers: {
-//           "Content-Type": "application/json",
-//           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-//         },
-//         body: JSON.stringify(payload),
-//       });
-
-//       if (!res.ok) {
-//         setFranchises((prev) => prev.filter((f) => f.id !== optimisticId));
-//         let errText = `Server error (${res.status})`;
-//         try {
-//           const errBody = await res.json();
-//           if (errBody && (errBody.message || errBody.error || errBody.errors)) {
-//             errText = errBody.message || errBody.error || JSON.stringify(errBody.errors);
-//           } else {
-//             errText = JSON.stringify(errBody);
-//           }
-//         } catch {
-//           try {
-//             const txt = await res.text();
-//             if (txt) errText = txt;
-//           } catch {}
-//         }
-//         console.error("Failed to create franchise:", errText);
-//         toast.error(`Failed to create franchise: ${errText}`);
-//         setLoading(false);
-//         return;
-//       }
-
-//       const body = await res.json().catch(() => null);
-//       const created = body && (body.row ?? body.data ?? body.franchise ?? body);
-
-//       if (created) {
-//         setFranchises((prev) => {
-//           const withoutOptimistic = prev.filter((f) => f.id !== optimisticId);
-//           const newItem = {
-//             id: created.id ?? created.franchise_id ?? created.franchiseId ?? created._id ?? Date.now(),
-//             franchise_name: created.franchise_name ?? created.name ?? payload.franchise_name,
-//             location: created.location ?? payload.location,
-//             owner_name: created.owner_name ?? created.owner ?? payload.owner_name,
-//             status: created.status ?? payload.status,
-//           };
-//           return [newItem, ...withoutOptimistic];
-//         });
-//         toast.success("Franchise created successfully");
-//       } else {
-//         // keep optimistic and inform
-//         toast.success("Franchise added (optimistic)");
-//         // optionally re-fetch to sync with server
-//         void fetchFranchises();
-//       }
-//     } catch (err: any) {
-//       setFranchises((prev) => prev.filter((f) => f.id !== optimisticId));
-//       console.error("Network error creating franchise:", err);
-//       toast.error("Network error while creating franchise. Please try again.");
-//     } finally {
-//       setLoading(false);
-//       setForm(initialForm);
-//     }
-//   };
-
-//   // ------------------ reverse geocode helper ------------------
-//   const handleLookupFromLatLon = async () => {
-//     const lat = form.latitude?.trim();
-//     const lon = form.longitude?.trim();
-
-//     if (!lat || !lon) {
-//       toast.error("Please enter both latitude and longitude.");
-//       return;
-//     }
-
-//     const latNum = Number(lat);
-//     const lonNum = Number(lon);
-//     if (Number.isNaN(latNum) || Number.isNaN(lonNum) || latNum < -90 || latNum > 90 || lonNum < -180 || lonNum > 180) {
-//       toast.error("Please enter valid numeric latitude and longitude values.");
-//       return;
-//     }
-
-//     setGeoLoading(true);
-//     toast.loading("Looking up address from coordinates...", { id: "geo" });
-
-//     const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(
-//       latNum
-//     )}&lon=${encodeURIComponent(lonNum)}&addressdetails=1`;
-
-//     try {
-//       const r = await fetch(nominatimUrl, { headers: { Accept: "application/json" } });
-
-//       if (!r.ok) {
-//         throw new Error(`Reverse geocode failed (${r.status})`);
-//       }
-
-//       const data = await r.json();
-//       const display = data.display_name ?? "";
-
-//       if (display) {
-//         setForm((s) => ({ ...s, address: display }));
-//         toast.dismiss("geo");
-//         toast.success("Address populated from coordinates");
-//       } else {
-//         toast.dismiss("geo");
-//         toast.error("Could not determine address from given coordinates.");
-//       }
-//     } catch (err) {
-//       console.error("Reverse geocode error:", err);
-//       toast.dismiss("geo");
-//       toast.error("Reverse geocoding failed. Please check your network or coordinates.");
-//     } finally {
-//       setGeoLoading(false);
-//     }
-//   };
-
-//   // ------------------ UI ------------------
-//   return (
-//     <div className="p-4 md:p-6 space-y-6">
-//       <Toaster position="top-right" />
-
-//       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
-//         <div className="flex-1 min-w-0">
-//           <h1 className="text-2xl md:text-3xl font-semibold text-gray-800 truncate">Franchise</h1>
-//         </div>
-
-//         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-//           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full sm:w-auto">
-//             <Card className="!p-0">
-//               <CardHeader>
-//                 <CardTitle className="flex items-center gap-2 text-sm">
-//                   <Building2 className="w-4 h-4" />
-//                   Total Franchises
-//                 </CardTitle>
-//               </CardHeader>
-//               <CardContent>
-//                 <p className="text-lg font-bold">{franchises.length}</p>
-//               </CardContent>
-//             </Card>
-
-//             <Card className="!p-0">
-//               <CardHeader>
-//                 <CardTitle className="flex items-center gap-2 text-sm">
-//                   <BarChart3 className="w-4 h-4" />
-//                   Monthly Sales
-//                 </CardTitle>
-//               </CardHeader>
-//               <CardContent>
-//                 <p className="text-lg font-bold">₹2.3M</p>
-//               </CardContent>
-//             </Card>
-
-//             <Card className="!p-0">
-//               <CardHeader>
-//                 <CardTitle className="flex items-center gap-2 text-sm">
-//                   <BarChart3 className="w-4 h-4" />
-//                   Growth Rate
-//                 </CardTitle>
-//               </CardHeader>
-//               <CardContent>
-//                 <p className="text-lg font-bold">12%</p>
-//               </CardContent>
-//             </Card>
-//           </div>
-
-//           <div className="flex items-center justify-end sm:justify-center gap-2">
-//             <Button onClick={() => void fetchFranchises({ showErrorToast: true })} className="flex items-center gap-2">
-//               <RefreshCw className="w-4 h-4" />
-//               {listLoading ? "Refreshing..." : "Refresh"}
-//             </Button>
-
-//             <Button
-//               onClick={openDrawer}
-//               className="flex items-center gap-2 ml-0 sm:ml-2 mt-2 sm:mt-0"
-//               aria-haspopup="dialog"
-//               aria-expanded={isDrawerOpen}
-//             >
-//               <PlusCircle className="w-4 h-4" />
-//               Add Franchise
-//             </Button>
-//           </div>
-//         </div>
-//       </div>
-
-//       <Card>
-//         <CardHeader>
-//           <CardTitle>Franchise Branches</CardTitle>
-//         </CardHeader>
-//         <CardContent>
-//           {listLoading ? (
-//             <div className="p-6 text-center text-sm text-gray-500">Loading franchises…</div>
-//           ) : listError ? (
-//             <div className="p-6 text-center text-sm text-red-600">
-//               {listError} — <button className="underline" onClick={() => void fetchFranchises()}>Retry</button>
-//             </div>
-//           ) : (
-//             <>
-//               <div className="hidden md:block w-full overflow-x-auto">
-//                 <table className="w-full text-sm text-left border-collapse">
-//                   <thead>
-//                     <tr className="border-b">
-//                       <th className="py-2 px-3">Name</th>
-//                       <th className="py-2 px-3">Location</th>
-//                       <th className="py-2 px-3">Owner</th>
-//                       <th className="py-2 px-3">Status</th>
-//                       {/* <th className="py-2 px-3">Actions</th> */}
-//                     </tr>
-//                   </thead>
-//                   <tbody>
-//                     {franchises.map((f) => (
-//                       <tr key={f.id} className="border-b hover:bg-gray-50">
-//                         <td className="py-2 px-3">{f.franchise_name}</td>
-//                         <td className="py-2 px-3">{f.location}</td>
-//                         <td className="py-2 px-3">{f.owner_name}</td>
-//                         <td className="py-2 px-3">
-//                           <span className={f.status === "active" ? "text-green-600 font-medium" : "text-red-600 font-medium"}>
-//                             {f.status === "active" ? "Active" : "Inactive"}
-//                           </span>
-//                         </td>
-//                         {/* <td className="py-2 px-3">
-//                           <Button variant="outline" size="sm">View</Button>
-//                         </td> */}
-//                       </tr>
-//                     ))}
-//                   </tbody>
-//                 </table>
-//               </div>
-
-//               <div className="md:hidden space-y-3">
-//                 {franchises.map((f) => (
-//                   <div key={f.id} className="border rounded-lg p-3 bg-white shadow-sm">
-//                     <div className="flex items-start justify-between gap-3">
-//                       <div className="min-w-0">
-//                         <div className="flex items-center gap-2">
-//                           <h3 className="text-sm font-medium truncate">{f.franchise_name}</h3>
-//                           <span
-//                             className={`text-xs font-semibold px-2 py-0.5 rounded ${f.status === "active" ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}
-//                           >
-//                             {f.status === "active" ? "Active" : "Inactive"}
-//                           </span>
-//                         </div>
-//                         <p className="text-xs text-slate-500 mt-1 truncate">{f.location}</p>
-//                         <p className="text-xs text-slate-500 mt-1">Owner: {f.owner_name}</p>
-//                       </div>
-
-//                       <div className="flex flex-col gap-2 items-end">
-//                         <Button variant="outline" size="sm">View</Button>
-//                       </div>
-//                     </div>
-//                   </div>
-//                 ))}
-//               </div>
-//             </>
-//           )}
-//         </CardContent>
-//       </Card>
-
-//       {/* Drawer overlay */}
-//       <div className={`fixed inset-0 z-40 transition-opacity ${isDrawerOpen ? "pointer-events-auto" : "pointer-events-none"}`} aria-hidden={!isDrawerOpen}>
-//         <div onClick={closeDrawer} className={`absolute inset-0 bg-black/40 transition-opacity ${isDrawerOpen ? "opacity-100" : "opacity-0"}`} />
-//       </div>
-
-//       {/* Drawer panel (form) */}
-//       <aside role="dialog" aria-modal="true" aria-labelledby="drawer-title" className={`fixed top-0 right-0 z-50 h-full w-full sm:w-[520px] transform transition-transform ${isDrawerOpen ? "translate-x-0" : "translate-x-full"}`}>
-//         <div className="h-full flex flex-col bg-white shadow-xl">
-//           <div className="flex items-center justify-between p-4 border-b">
-//             <div className="flex items-center gap-3">
-//               <div className="rounded-md bg-gray-100 p-2">
-//                 <Building2 className="w-5 h-5" />
-//               </div>
-//               <div>
-//                 <h2 id="drawer-title" className="text-lg font-medium">Add Franchise</h2>
-//                 <p className="text-sm text-gray-500">Fill details to add a new franchise.</p>
-//               </div>
-//             </div>
-//             <button onClick={closeDrawer} aria-label="Close drawer" className="p-2 rounded hover:bg-gray-100">
-//               <X className="w-5 h-5" />
-//             </button>
-//           </div>
-
-//           <form className="flex-1 overflow-auto p-4 sm:p-6" onSubmit={handleSubmit} data-testid="franchise-drawer-form">
-//             <div className="grid grid-cols-1 gap-4">
-//               {/* fields (same as before) */}
-//               <div>
-//                 <label htmlFor="franchise_name" className="block text-sm font-medium text-gray-700">Franchise Name</label>
-//                 <input id="franchise_name" value={form.franchise_name} onChange={handleChange("franchise_name")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                 {errors.franchise_name && <p className="text-sm text-red-600 mt-1">{errors.franchise_name}</p>}
-//               </div>
-
-//               <div>
-//                 <label htmlFor="location" className="block text-sm font-medium text-gray-700">Location</label>
-//                 <input id="location" value={form.location} onChange={handleChange("location")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                 {errors.location && <p className="text-sm text-red-600 mt-1">{errors.location}</p>}
-//               </div>
-
-//               <div>
-//                 <label htmlFor="owner_name" className="block text-sm font-medium text-gray-700">Owner Name</label>
-//                 <input id="owner_name" value={form.owner_name} onChange={handleChange("owner_name")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                 {errors.owner_name && <p className="text-sm text-red-600 mt-1">{errors.owner_name}</p>}
-//               </div>
-
-//               <div>
-//                 <label htmlFor="contact_number" className="block text-sm font-medium text-gray-700">Contact Number</label>
-//                 <input id="contact_number" value={form.contact_number} onChange={handleChange("contact_number")} placeholder="+919876543210" className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                 {errors.contact_number && <p className="text-sm text-red-600 mt-1">{errors.contact_number}</p>}
-//               </div>
-
-//               <div>
-//                 <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-//                 <input id="email" type="email" value={form.email} onChange={handleChange("email")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                 {errors.email && <p className="text-sm text-red-600 mt-1">{errors.email}</p>}
-//               </div>
-
-//               <div>
-//                 <label htmlFor="status" className="block text-sm font-medium text-gray-700">Status</label>
-//                 <select id="status" value={form.status} onChange={handleChange("status")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500">
-//                   <option value="active">Active</option>
-//                   <option value="inactive">Inactive</option>
-//                 </select>
-//               </div>
-
-//               <div>
-//                 <label htmlFor="address" className="block text-sm font-medium text-gray-700">Address</label>
-//                 <div className="mt-1 grid grid-cols-1 gap-2">
-//                   <div className="grid grid-cols-2 gap-2">
-//                     <div>
-//                       <input id="latitude" placeholder="Latitude (e.g. 17.3850)" value={form.latitude} onChange={handleChange("latitude")} className="block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                     </div>
-//                     <div>
-//                       <input id="longitude" placeholder="Longitude (e.g. 78.4867)" value={form.longitude} onChange={handleChange("longitude")} className="block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                     </div>
-//                   </div>
-
-//                   <div className="flex gap-2">
-//                     <div className="flex-1">
-//                       <textarea id="address" value={form.address} onChange={handleChange("address")} rows={3} className="block w-full rounded-md border px-3 py-2 resize-y focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                     </div>
-//                     <div className="w-36 flex-shrink-0">
-//                       <button type="button" onClick={handleLookupFromLatLon} className={`w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md border ${geoLoading ? "bg-gray-100" : "bg-white hover:bg-gray-50"}`} disabled={geoLoading}>
-//                         {geoLoading ? "Looking…" : "Lookup"}
-//                       </button>
-//                     </div>
-//                   </div>
-//                 </div>
-//                 {errors.address && <p className="text-sm text-red-600 mt-1">{errors.address}</p>}
-//                 <p className="text-xs text-gray-400 mt-1">Enter latitude and longitude, then click <strong>Lookup</strong> to auto-fill the address.</p>
-//               </div>
-
-//               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-//                 <div>
-//                   <label htmlFor="gst_tax_id" className="block text-sm font-medium text-gray-700">GST / Tax ID</label>
-//                   <input id="gst_tax_id" value={form.gst_tax_id} onChange={handleChange("gst_tax_id")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                 </div>
-//                 <div>
-//                   <label htmlFor="bank_account" className="block text-sm font-medium text-gray-700">Bank Account</label>
-//                   <input id="bank_account" value={form.bank_account} onChange={handleChange("bank_account")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-//                 </div>
-//               </div>
-//             </div>
-
-//             <div className="sticky bottom-0 bg-white pt-4 mt-6 border-t flex items-center justify-end gap-3">
-//               <Button variant="ghost" onClick={closeDrawer} type="button">Cancel</Button>
-//               <Button type="submit" onClick={handleSubmit} disabled={loading}>{loading ? "Saving..." : "Save Franchise"}</Button>
-//             </div>
-//           </form>
-//         </div>
-//       </aside>
-//     </div>
-//   );
-// };
-
-// export default Franchise;
 
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { PlusCircle, Building2, BarChart3, X, RefreshCw, Edit3, Trash2 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-
 type FranchiseForm = {
   name: string;
   businessName: string;
@@ -592,13 +27,7 @@ const initialForm: FranchiseForm = {
   imageFile: null,
 };
 
-// API endpoints (adjust host if needed)
-// list -> GET    : /admin/franchise
-// create -> POST : /admin/franchise/add
-// update -> POST : /admin/franchise/update/:id
-// show   -> GET  : /admin/franchise/show/:id
-// delete -> DELETE: /admin/franchise/delete/:id
-const API_HOST = "http://192.168.29.102:5000/api"; // change to your host
+const API_HOST = "http://192.168.1.6:8000/api"; // change to your host
 const API_BASE = `${API_HOST}/admin/franchise`;
 
 type FranchiseItem = {
@@ -647,7 +76,7 @@ const Franchise: React.FC = () => {
     try {
       const res = await fetch(`${API_BASE}/show/${item.id}`, {
         method: "GET",
-        headers: { ...tokenHeader() },
+        headers: { Accept: "application/json", ...tokenHeader() },
       });
       if (res.ok) {
         const body = await res.json().catch(() => null);
@@ -660,8 +89,9 @@ const Franchise: React.FC = () => {
             address: data.address ?? item.address ?? "",
             email: data.email ?? item.email ?? "",
             phone: data.phone ?? item.phone ?? "",
-            amount: (data.amount ?? item.amount ?? "") + "",
+            amount: (data.deposit_amount ?? data.amount ?? item.amount ?? "") + "",
             imageFile: null,
+            password: "", // never populate password
           }));
         }
       }
@@ -694,6 +124,36 @@ const Franchise: React.FC = () => {
     setErrors((err) => ({ ...err, imageFile: undefined }));
   };
 
+  // map server validation errors (if any) to a single string map we can show near inputs
+  const mapValidationErrorsToForm = (errPayload: any) => {
+    const out: Partial<Record<keyof FranchiseForm, string>> = {};
+    if (!errPayload) return out;
+    // common shapes:
+    // { errors: { name: ["..."], email: ["..."] } }
+    // { validation: { email: "..." } }
+    // { message: { email: ["..."] } }
+    const candidates = errPayload.errors ?? errPayload.validation ?? errPayload.message ?? errPayload;
+    if (typeof candidates === "object") {
+      for (const key of Object.keys(candidates)) {
+        const val = (candidates as any)[key];
+        if (!val) continue;
+        const kLower = key.toLowerCase();
+        // find closest form key
+        if (kLower.includes("name")) out.name = Array.isArray(val) ? val.join(" ") : String(val);
+        if (kLower.includes("business") || kLower.includes("company")) out.businessName = Array.isArray(val) ? val.join(" ") : String(val);
+        if (kLower.includes("address")) out.address = Array.isArray(val) ? val.join(" ") : String(val);
+        if (kLower.includes("email")) out.email = Array.isArray(val) ? val.join(" ") : String(val);
+        if (kLower.includes("phone") || kLower.includes("mobile") || kLower.includes("contact")) out.phone = Array.isArray(val) ? val.join(" ") : String(val);
+        if (kLower.includes("password")) out.password = Array.isArray(val) ? val.join(" ") : String(val);
+        if (kLower.includes("amount") || kLower.includes("deposit")) out.amount = Array.isArray(val) ? val.join(" ") : String(val);
+      }
+    } else if (typeof candidates === "string") {
+      // generic string message: put on name as fallback
+      out.name = String(candidates);
+    }
+    return out;
+  };
+
   // Validation
   const validate = (): boolean => {
     const err: Partial<Record<keyof FranchiseForm, string>> = {};
@@ -720,7 +180,7 @@ const Franchise: React.FC = () => {
     try {
       const res = await fetch(`${API_BASE}`, {
         method: "GET",
-        headers: { "Accept": "application/json", ...tokenHeader() },
+        headers: { Accept: "application/json", ...tokenHeader() },
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -746,7 +206,7 @@ const Franchise: React.FC = () => {
         email: r.email ?? "",
         phone: r.phone ?? r.contact_number ?? r.mobile ?? "",
         amount: r.deposit_amount ?? r.amount ?? r.balance ?? r.due ?? "",
-        status: (r.status ?? "active").toLowerCase(),
+        status: String(r.status ?? "active").toLowerCase(),
         image_url: r.image_url ?? r.image ?? null,
       }));
 
@@ -754,7 +214,7 @@ const Franchise: React.FC = () => {
     } catch (err) {
       console.error("Fetch franchises error:", err);
       setListError("Network error");
-      toast.error("Network error while loading franchises");
+      // toast.error("Network error while loading franchises");
       setFranchises([]);
     } finally {
       setListLoading(false);
@@ -775,21 +235,43 @@ const Franchise: React.FC = () => {
     if (payload.email) formData.append("email", payload.email);
     if (payload.phone) formData.append("phone", payload.phone);
     if (payload.password) formData.append("password", payload.password);
-    if (payload.amount) formData.append("deposit_amount", payload.amount);
+    // include deposit_amount (server seems to use deposit_amount)
+    if (payload.amount) {
+      formData.append("deposit_amount", payload.amount);
+    }
     if (payload.imageFile) formData.append("image", payload.imageFile);
 
     const res = await fetch(`${API_BASE}/add`, {
       method: "POST",
-      headers: { ...tokenHeader() }, // do NOT set Content-Type with FormData
+      headers: { Accept: "application/json", ...tokenHeader() }, // do NOT set Content-Type with FormData
       body: formData,
     });
 
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
-      throw new Error(msg);
+    // robust parse: try json, else fallback to text
+    let parsed: any = null;
+    try {
+      parsed = await res.json();
+    } catch (err) {
+      try {
+        parsed = await res.text();
+      } catch {
+        parsed = null;
+      }
     }
-    return body?.data ?? body?.franchise ?? body ?? null;
+
+    if (!res.ok) {
+      const serverMsg = (parsed && (parsed.message || parsed.error)) || `Server error (${res.status})`;
+      const validation = parsed?.errors ?? parsed?.validation ?? parsed ?? null;
+      const mapped = mapValidationErrorsToForm(validation);
+      if (Object.keys(mapped).length) {
+        setErrors((prev) => ({ ...prev, ...mapped }));
+      }
+      // throw Error with server message so caller can handle it
+      throw new Error(typeof serverMsg === "string" ? serverMsg : JSON.stringify(serverMsg));
+    }
+
+    // success: prefer data nested under data/franchise
+    return parsed?.data ?? parsed?.franchise ?? parsed ?? null;
   };
 
   // ---------- Update (POST /update/:id) ----------
@@ -806,23 +288,34 @@ const Franchise: React.FC = () => {
 
     const res = await fetch(`${API_BASE}/update/${id}`, {
       method: "POST",
-      headers: { ...tokenHeader() },
+      headers: { Accept: "application/json", ...tokenHeader() },
       body: formData,
     });
 
-    const body = await res.json().catch(() => null);
-    if (!res.ok) {
-      const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
-      throw new Error(msg);
+    let parsed: any = null;
+    try {
+      parsed = await res.json();
+    } catch {
+      parsed = null;
     }
-    return body?.data ?? body?.franchise ?? body ?? null;
+
+    if (!res.ok) {
+      const serverMsg = (parsed && (parsed.message || parsed.error)) || `Server error (${res.status})`;
+      const validation = parsed?.errors ?? parsed?.validation ?? parsed;
+      const mapped = mapValidationErrorsToForm(validation);
+      if (Object.keys(mapped).length) {
+        setErrors((prev) => ({ ...prev, ...mapped }));
+      }
+      throw new Error(serverMsg);
+    }
+    return parsed?.data ?? parsed?.franchise ?? parsed ?? null;
   };
 
   // ---------- Delete ----------
   const deleteFranchiseApi = async (id: string | number) => {
     const res = await fetch(`${API_BASE}/delete/${id}`, {
       method: "DELETE",
-      headers: { "Accept": "application/json", ...tokenHeader() },
+      headers: { Accept: "application/json", ...tokenHeader() },
     });
     const body = await res.json().catch(() => null);
     if (!res.ok) {
@@ -854,7 +347,8 @@ const Franchise: React.FC = () => {
     setLoading(true);
 
     if (!editingId) {
-      // optimistic add
+      // optimistic add - snapshot previous state so we can roll back
+      const prevList = [...franchises];
       const optimisticId = `tmp-${Date.now()}`;
       const optimisticItem: FranchiseItem = {
         id: optimisticId,
@@ -867,10 +361,12 @@ const Franchise: React.FC = () => {
         status: "active",
       };
       setFranchises((prev) => [optimisticItem, ...prev]);
+      // close drawer as before
       setIsDrawerOpen(false);
 
       try {
         const created = await createFranchise(payload);
+        // replace optimistic with created
         setFranchises((prev) => {
           const withoutOptimistic = prev.filter((p) => p.id !== optimisticId);
           const newItem: FranchiseItem = {
@@ -881,21 +377,30 @@ const Franchise: React.FC = () => {
             email: created?.email ?? payload.email ?? "",
             phone: created?.phone ?? payload.phone ?? "",
             amount: created?.deposit_amount ?? created?.amount ?? payload.amount ?? "",
-            status: (created?.status ?? "active").toLowerCase(),
+            status: String(created?.status ?? "active").toLowerCase(),
             image_url: created?.image_url ?? created?.image ?? null,
           };
           return [newItem, ...withoutOptimistic];
         });
         toast.success("Franchise created");
+        // only clear form on success
+        setForm(initialForm);
+        setErrors({});
       } catch (err: any) {
-        setFranchises((prev) => prev.filter((p) => !String(p.id).startsWith("tmp-")));
+        // rollback optimistic
+        setFranchises(prevList);
         console.error("Create franchise error:", err);
-        toast.error(err?.message || "Failed to create franchise");
+        // If createFranchise mapped errors, they are already set in state; still show toast
+        if (Object.keys(errors).length === 0) {
+          toast.error(err?.message || "Failed to create franchise");
+        }
+        // reopen drawer and keep user's input so they can fix errors
+        setIsDrawerOpen(true);
       } finally {
         setLoading(false);
-        setForm(initialForm);
       }
     } else {
+      // update existing
       const idToUpdate = editingId;
       setIsDrawerOpen(false);
       const prevSnapshot = [...franchises];
@@ -903,25 +408,37 @@ const Franchise: React.FC = () => {
 
       try {
         const updated = await updateFranchise(idToUpdate, payload);
-        setFranchises((prev) => prev.map((p) => (String(p.id) === String(idToUpdate) ? {
-          id: updated?.id ?? updated?._id ?? updated?.franchise_id ?? p.id,
-          name: updated?.name ?? updated?.franchise_name ?? payload.name ?? p.name,
-          businessName: updated?.business_name ?? updated?.businessName ?? payload.businessName ?? p.businessName,
-          address: updated?.address ?? payload.address ?? p.address,
-          email: updated?.email ?? payload.email ?? p.email,
-          phone: updated?.phone ?? payload.phone ?? p.phone,
-          amount: updated?.deposit_amount ?? updated?.amount ?? payload.amount ?? p.amount,
-          status: (updated?.status ?? p.status ?? "active").toLowerCase(),
-          image_url: updated?.image_url ?? updated?.image ?? p.image_url ?? null,
-        } : p)));
+        setFranchises((prev) =>
+          prev.map((p) =>
+            String(p.id) === String(idToUpdate)
+              ? {
+                  id: updated?.id ?? updated?._id ?? updated?.franchise_id ?? p.id,
+                  name: updated?.name ?? updated?.franchise_name ?? payload.name ?? p.name,
+                  businessName: updated?.business_name ?? updated?.businessName ?? payload.businessName ?? p.businessName,
+                  address: updated?.address ?? payload.address ?? p.address,
+                  email: updated?.email ?? payload.email ?? p.email,
+                  phone: updated?.phone ?? payload.phone ?? p.phone,
+                  amount: updated?.deposit_amount ?? updated?.amount ?? payload.amount ?? p.amount,
+                  status: String(updated?.status ?? p.status ?? "active").toLowerCase(),
+                  image_url: updated?.image_url ?? updated?.image ?? p.image_url ?? null,
+                }
+              : p
+          )
+        );
         toast.success("Franchise updated");
+        setForm(initialForm);
+        setErrors({});
       } catch (err: any) {
         console.error("Update franchise error:", err);
         setFranchises(prevSnapshot);
-        toast.error(err?.message || "Failed to update franchise");
+        // Update errors if backend returned validation errors (they were set in updateFranchise)
+        if (Object.keys(errors).length === 0) {
+          toast.error(err?.message || "Failed to update franchise");
+        }
+        // reopen drawer with previous form
+        setIsDrawerOpen(true);
       } finally {
         setLoading(false);
-        setForm(initialForm);
         setEditingId(null);
       }
     }
@@ -954,46 +471,6 @@ const Franchise: React.FC = () => {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 w-full sm:w-auto">
-            <Card className="!p-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <Building2 className="w-4 h-4" />
-                  Total Franchises
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-bold">{franchises.length}</p>
-              </CardContent>
-            </Card>
-
-            <Card className="!p-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <BarChart3 className="w-4 h-4" />
-                  Total Amount
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-bold">
-                  ₹{franchises.reduce((s, f) => s + Number((f.amount ?? "0").toString().replace(/[^\d.]/g, "") || 0), 0)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card className="!p-0">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <BarChart3 className="w-4 h-4" />
-                  Active
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-lg font-bold">{franchises.filter((f) => f.status === "active").length}</p>
-              </CardContent>
-            </Card>
-          </div>
-
           <div className="flex items-center justify-end sm:justify-center gap-2">
             <Button onClick={() => void fetchFranchises({ showErrorToast: true })} className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
@@ -1179,8 +656,10 @@ const Franchise: React.FC = () => {
     </div>
   );
 };
-
 export default Franchise;
+
+
+
 
 
 

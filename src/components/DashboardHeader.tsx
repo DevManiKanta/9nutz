@@ -269,16 +269,7 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
                     <div className="text-xs text-gray-500">{user?.username ?? ""}</div>
                   </div>
                 </div>
-
                 <div className="mt-2 border-t border-gray-100 pt-2">
-                  <button
-                    onClick={() => navigate("/profile")}
-                    className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-gray-50"
-                    role="menuitem"
-                  >
-                    Profile
-                  </button>
-
                   <button
                     onClick={handleLogout}
                     className="w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm hover:bg-gray-50"

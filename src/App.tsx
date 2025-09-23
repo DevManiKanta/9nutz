@@ -27,20 +27,20 @@ import DiscountInvoices from "./pages/DiscountInvoices";
 import TeleCallerList from "./pages/TeleCallerList";
 import TeleCallerStatus from "./pages/TeleCallerStatus";
 import CrmReport from "./pages/CrmReport";
-import Obsales from "./pages/Obsales"
+// import Obsales from "./pages/Obsales"
 
 // NEW: SKU pages (place these files at src/pages/sku/ if not present)
 import SkuList from "@/pages/SkuList";
 import SkuMovement from "@/pages/SkuMovement";
 import Sku from "@/pages/Sku";
-import BeatList from "./pages/BeatList";
-import ObSales from "./pages/Obsales";
+// import BeatList from "./pages/BeatList";
+// import ObSales from "./pages/Obsales";
 import ExpenseSummary from "./pages/ExpenseSummary";
 import CashWithdrawl from "./pages/CashWithdrawl";
 import Billing from "./pages/Billing";
 import RealTimeInventory from "./pages/RealTimeInventory";
 import DailyInventory from "./pages/DailyInventory";
-import SlocStock from "./pages/SlocStock";
+import SlocStock from "./pages/CommingSoon";
 import Settlement from "./pages/Settlement";
 import PreShortSupply from "./pages/PreShortSupply";
 import GstCacheProfitability from "./pages/GstCacheProfitability";
@@ -57,9 +57,9 @@ import RouteManagement from "./pages/RouteManagement";
 import AssetsManagement from "./pages/AssetsManagement";
 import ConsolidatedVehiclePay from "./pages/ConsolidatedVehiclePay";
 import RentVehiclePaymentsList from "./pages/RentVehiclePaymentsList";
-import VehiclePaymentsList from "./pages/VehiclePaymentsList";
 import FranchiseRequests from "./pages/FranchiseRequests";
-
+import CommingSoon from "./pages/CommingSoon";
+import PublicRoute from "@/components/auth/ProtectedRoute";
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -70,8 +70,9 @@ const App = () => (
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            {/* Public Route */}
+
             <Route path="/login" element={<LoginForm />} />
+            
             {/* <Route path="/signup" element={<SignupForm />} /> */}
             <Route path="/forgot-password" element={<ForgotPasswordForm />} />
 
@@ -167,11 +168,11 @@ const App = () => (
               }
             />
              <Route
-              path="/BeatList"
+              path="/CommingSoon"
               element={
                 <ProtectedRoute>
                   <DashboardLayout>
-                    <BeatList />
+                    <CommingSoon/>
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -289,16 +290,6 @@ const App = () => (
                 <ProtectedRoute>
                   <DashboardLayout>
                     <CrmReport />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
-              <Route
-              path="/ObSales"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <ObSales />
                   </DashboardLayout>
                 </ProtectedRoute>
               }
@@ -517,16 +508,6 @@ const App = () => (
               }
             />
            {/* ---------- end MANAGEMENT routes ---------- */}
-            <Route
-              path="VehiclePayments/VehiclePaymentsList"
-              element={
-                <ProtectedRoute>
-                  <DashboardLayout>
-                    <VehiclePaymentsList />
-                  </DashboardLayout>
-                </ProtectedRoute>
-              }
-            />
              <Route
               path="VehiclePayments/RentVehiclePaymentsList"
               element={
