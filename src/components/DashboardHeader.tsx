@@ -4,15 +4,11 @@ import {
   Search,
   Plus,
   Bell,
-  Settings,
   LogOut,
   Home,
   Package,
-  Map,
-  Users,
-  ClipboardList,
   Building2,
-  Repeat,
+  BarChart3
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -24,6 +20,13 @@ interface HeaderProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
 }
+
+type TabItem = {
+  key: string;
+  label: string;
+  path: string;
+  Icon?: React.ComponentType<any>;
+};
 
 export const DashboardHeader: React.FC<HeaderProps> = ({
   onMenuToggle,
@@ -38,7 +41,6 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
   const [userOpen, setUserOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
 
-  // refs for outside click detection and focus
   const plusBtnRef = useRef<HTMLButtonElement | null>(null);
   const plusPanelRef = useRef<HTMLDivElement | null>(null);
 
@@ -48,15 +50,14 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
   const notifBtnRef = useRef<HTMLButtonElement | null>(null);
   const notifPanelRef = useRef<HTMLDivElement | null>(null);
 
-  // tabs to show in plus popover (icons included)
-  const tabs = [
+  // tabs to show in plus popover (icons included) — NOTE: use `Icon` property consistently
+  const tabs: TabItem[] = [
     { key: "dashboard", label: "Dashboard", path: "/dashboard", Icon: Home },
     { key: "products", label: "Products", path: "/products", Icon: Package },
-    { key: "employees", label: "Employees", path: "/employees", Icon: Users },
-    { key: "inventory", label: "Inventory Management", path: "/inventory", Icon: ClipboardList },
-      // { key: "franchise", label: "Franchise", path: "/franchise", icon: Building2 },
-      // { key: "customer", label: "Customer", path: "/customer", icon: Users },
-      // { key: "StockVariation", label: "Expenses Summary", path: "/stockvariation", icon: Repeat },
+    { key: "customerSaleHistory", label: "Category", path: "/categorywisesale", Icon:BarChart3 },
+    { key: "franchise", label: "Franchise", path: "/franchise", Icon: Building2 },
+    // { key: "customer", label: "Customer", path: "/customer", Icon: Users },
+    // { key: "StockVariation", label: "Expenses Summary", path: "/stockvariation", Icon: Repeat },
   ];
 
   // close popovers on outside click and ESC
@@ -103,7 +104,6 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
     };
   }, [plusOpen, userOpen, notifOpen]);
 
-  // logout helper
   const handleLogout = async () => {
     try {
       await logout();
@@ -115,7 +115,6 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
     }
   };
 
-  // when clicking an action/tab from plus menu
   const onPlusNavigate = (path: string) => {
     setPlusOpen(false);
     navigate(path);
@@ -183,11 +182,10 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
                       title={t.label}
                     >
                       <div className="w-8 h-8 bg-indigo-50 rounded flex items-center justify-center">
-                        <Icon className="w-4 h-4 text-indigo-600" />
+                        {Icon ? <Icon className="w-4 h-4 text-indigo-600" /> : null}
                       </div>
                       <div>
                         <div className="font-medium text-sm">{t.label}</div>
-                        {/* <div className="text-xs text-gray-400 truncate">{t.path}</div> */}
                       </div>
                     </button>
                   );
@@ -233,16 +231,6 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
           )}
         </div>
 
-        {/* Settings shortcut */}
-        {/* <button
-          type="button"
-          onClick={() => navigate("/settings")}
-          className="p-2 rounded-full hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-200"
-          title="Settings"
-        >
-          <Settings className="h-5 w-5 text-gray-700" />
-        </button> */}
-
         {/* User dropdown */}
         <div className="relative">
           <div
@@ -259,9 +247,9 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
             className="flex items-center gap-2 ml-2 cursor-pointer select-none"
           >
             <div className="w-8 h-8 bg-indigo-600 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-white">{user?.name?.[0] ?? "A"}</span>
+              <span className="text-sm font-medium text-white">{(user?.name ?? user?.username ?? "A")[0]}</span>
             </div>
-            <span className="text-sm font-medium text-gray-800 hidden sm:inline">{user?.name ?? "Admin"}</span>
+            <span className="text-sm font-medium text-gray-800 hidden sm:inline">{user?.name ?? user?.username ?? "Admin"}</span>
           </div>
 
           {userOpen && (
@@ -274,11 +262,11 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
               <div className="p-3">
                 <div className="flex items-center gap-3 px-1 py-2">
                   <div className="w-10 h-10 bg-indigo-600 rounded-full flex items-center justify-center">
-                    <span className="text-sm font-medium text-white">{user?.name?.[0] ?? "A"}</span>
+                    <span className="text-sm font-medium text-white">{(user?.name ?? user?.username ?? "A")[0]}</span>
                   </div>
                   <div className="text-sm">
-                    <div className="font-medium">{user?.name ?? "Admin"}</div>
-                    <div className="text-xs text-gray-500">{user?.email ?? ""}</div>
+                    <div className="font-medium">{user?.name ?? user?.username ?? "Admin"}</div>
+                    <div className="text-xs text-gray-500">{user?.username ?? ""}</div>
                   </div>
                 </div>
 

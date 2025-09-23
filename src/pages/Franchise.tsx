@@ -578,6 +578,7 @@ type FranchiseForm = {
   phone: string;
   password: string;
   amount: string;
+  imageFile?: File | null;
 };
 
 const initialForm: FranchiseForm = {
@@ -588,14 +589,17 @@ const initialForm: FranchiseForm = {
   phone: "",
   password: "",
   amount: "",
+  imageFile: null,
 };
 
-// update to your API root; endpoints used:
-// GET    -> API_URL              (list)
-// POST   -> API_URL              (create)
-// PUT    -> `${API_URL}/${id}`   (update)  (falls back to PATCH if you want to change later)
-// DELETE -> `${API_URL}/${id}`   (delete)
-const API_URL = "http://192.168.29.102:5000/api/franchises";
+// API endpoints (adjust host if needed)
+// list -> GET    : /admin/franchise
+// create -> POST : /admin/franchise/add
+// update -> POST : /admin/franchise/update/:id
+// show   -> GET  : /admin/franchise/show/:id
+// delete -> DELETE: /admin/franchise/delete/:id
+const API_HOST = "http://192.168.29.102:5000/api"; // change to your host
+const API_BASE = `${API_HOST}/admin/franchise`;
 
 type FranchiseItem = {
   id: string | number;
@@ -606,6 +610,7 @@ type FranchiseItem = {
   phone: string;
   amount?: string;
   status?: string;
+  image_url?: string | null;
 };
 
 const Franchise: React.FC = () => {
@@ -618,10 +623,14 @@ const Franchise: React.FC = () => {
   const [listLoading, setListLoading] = useState(false);
   const [listError, setListError] = useState<string | null>(null);
 
-  // editing state
   const [editingId, setEditingId] = useState<string | number | null>(null);
 
-  // helpers
+  // ---------- Helpers ----------
+  const tokenHeader = () => {
+    const token = localStorage.getItem("token");
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
   const openDrawerForCreate = () => {
     setForm(initialForm);
     setErrors({});
@@ -629,19 +638,37 @@ const Franchise: React.FC = () => {
     setIsDrawerOpen(true);
   };
 
-  const openDrawerForEdit = (item: FranchiseItem) => {
-    setForm({
-      name: item.name ?? "",
-      businessName: item.businessName ?? "",
-      address: item.address ?? "",
-      email: item.email ?? "",
-      phone: item.phone ?? "",
-      password: "", // do not prefill password
-      amount: item.amount ?? "",
-    });
+  const openDrawerForEdit = async (item: FranchiseItem) => {
     setErrors({});
     setEditingId(item.id);
     setIsDrawerOpen(true);
+
+    // Try to fetch latest details (show endpoint) -- optional but useful
+    try {
+      const res = await fetch(`${API_BASE}/show/${item.id}`, {
+        method: "GET",
+        headers: { ...tokenHeader() },
+      });
+      if (res.ok) {
+        const body = await res.json().catch(() => null);
+        const data = body?.data ?? body?.franchise ?? body ?? null;
+        if (data) {
+          setForm((s) => ({
+            ...s,
+            name: data.name ?? data.franchise_name ?? item.name ?? "",
+            businessName: data.business_name ?? data.businessName ?? item.businessName ?? "",
+            address: data.address ?? item.address ?? "",
+            email: data.email ?? item.email ?? "",
+            phone: data.phone ?? item.phone ?? "",
+            amount: (data.amount ?? item.amount ?? "") + "",
+            imageFile: null,
+          }));
+        }
+      }
+    } catch (err) {
+      // ignore - we'll still use the passed item data
+      console.warn("Could not fetch detail for edit:", err);
+    }
   };
 
   const closeDrawer = () => {
@@ -650,7 +677,7 @@ const Franchise: React.FC = () => {
       setForm(initialForm);
       setErrors({});
       setEditingId(null);
-    }, 200);
+    }, 180);
   };
 
   const handleChange =
@@ -661,7 +688,13 @@ const Franchise: React.FC = () => {
       setErrors((err) => ({ ...err, [k]: undefined }));
     };
 
-  // Validation: password required only on create (editingId == null)
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0];
+    setForm((s) => ({ ...s, imageFile: file || null }));
+    setErrors((err) => ({ ...err, imageFile: undefined }));
+  };
+
+  // Validation
   const validate = (): boolean => {
     const err: Partial<Record<keyof FranchiseForm, string>> = {};
     if (!form.name.trim()) err.name = "Name is required";
@@ -671,7 +704,6 @@ const Franchise: React.FC = () => {
     else if (!/^\S+@\S+\.\S+$/.test(form.email.trim())) err.email = "Invalid email";
     if (!form.phone.trim()) err.phone = "Phone is required";
     else if (!/^\+?\d{7,15}$/.test(form.phone.trim())) err.phone = "Invalid phone number";
-    // password required for create
     if (!editingId && !form.password.trim()) err.password = "Password is required";
     else if (form.password && form.password.trim() && form.password.trim().length < 6) err.password = "Password must be at least 6 characters";
     if (!form.amount.trim()) err.amount = "Amount is required";
@@ -685,43 +717,37 @@ const Franchise: React.FC = () => {
   const fetchFranchises = async (opts?: { showErrorToast?: boolean }) => {
     setListLoading(true);
     setListError(null);
-    const token = localStorage.getItem("token");
     try {
-      const res = await fetch(API_URL, {
+      const res = await fetch(`${API_BASE}`, {
         method: "GET",
-        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        headers: { "Accept": "application/json", ...tokenHeader() },
       });
-
       if (!res.ok) {
-        let msg = `Failed to load (${res.status})`;
-        try {
-          const body = await res.json().catch(() => null);
-          if (body && (body.message || body.error)) msg = body.message || body.error;
-        } catch {}
+        const body = await res.json().catch(() => null);
+        const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
         setListError(msg);
         if (opts?.showErrorToast !== false) toast.error(`Failed to load franchises: ${msg}`);
         setFranchises([]);
         return;
       }
-
       const body = await res.json().catch(() => null);
-      // try common shapes
       let rows: any[] = [];
       if (Array.isArray(body)) rows = body;
       else if (Array.isArray(body.data)) rows = body.data;
-      else if (Array.isArray(body.rows)) rows = body.rows;
       else if (Array.isArray(body.franchises)) rows = body.franchises;
+      else if (Array.isArray(body.rows)) rows = body.rows;
       else rows = [];
 
       const normalized: FranchiseItem[] = rows.map((r: any, idx: number) => ({
         id: r.id ?? r._id ?? r.franchise_id ?? `srv-${idx}`,
-        name: r.name ?? r.franchise_name ?? r.title ?? "",
-        businessName: r.businessName ?? r.business_name ?? r.company ?? r.business ?? "",
-        address: r.address ?? r.location ?? r.addr ?? "",
+        name: r.name ?? r.franchise_name ?? "",
+        businessName: r.business_name ?? r.businessName ?? r.company ?? "",
+        address: r.address ?? r.location ?? "",
         email: r.email ?? "",
         phone: r.phone ?? r.contact_number ?? r.mobile ?? "",
-        amount: r.amount ?? r.balance ?? r.due ?? "",
+        amount: r.deposit_amount ?? r.amount ?? r.balance ?? r.due ?? "",
         status: (r.status ?? "active").toLowerCase(),
+        image_url: r.image_url ?? r.image ?? null,
       }));
 
       setFranchises(normalized);
@@ -740,86 +766,65 @@ const Franchise: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- Create ----------
+  // ---------- Create (multipart/form-data) ----------
   const createFranchise = async (payload: Partial<FranchiseForm>) => {
-    const token = localStorage.getItem("token");
-    const res = await fetch(API_URL, {
+    const formData = new FormData();
+    if (payload.name) formData.append("name", payload.name);
+    if (payload.businessName) formData.append("business_name", payload.businessName);
+    if (payload.address) formData.append("address", payload.address);
+    if (payload.email) formData.append("email", payload.email);
+    if (payload.phone) formData.append("phone", payload.phone);
+    if (payload.password) formData.append("password", payload.password);
+    if (payload.amount) formData.append("deposit_amount", payload.amount);
+    if (payload.imageFile) formData.append("image", payload.imageFile);
+
+    const res = await fetch(`${API_BASE}/add`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify(payload),
+      headers: { ...tokenHeader() }, // do NOT set Content-Type with FormData
+      body: formData,
     });
-    const body = await (async () => {
-      try {
-        return await res.json();
-      } catch {
-        return null;
-      }
-    })();
+
+    const body = await res.json().catch(() => null);
     if (!res.ok) {
       const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
       throw new Error(msg);
     }
-    // prefer body.data or body.row or body.franchise
-    return body?.data ?? body?.row ?? body?.franchise ?? body ?? null;
+    return body?.data ?? body?.franchise ?? body ?? null;
   };
 
-  // ---------- Update ----------
+  // ---------- Update (POST /update/:id) ----------
   const updateFranchise = async (id: string | number, payload: Partial<FranchiseForm>) => {
-    const token = localStorage.getItem("token");
-    // try PUT then fallback to PATCH
-    let res = await fetch(`${API_URL}/${id}`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify(payload),
+    const formData = new FormData();
+    if (payload.name) formData.append("name", payload.name);
+    if (payload.businessName) formData.append("business_name", payload.businessName);
+    if (payload.address) formData.append("address", payload.address);
+    if (payload.email) formData.append("email", payload.email);
+    if (payload.phone) formData.append("phone", payload.phone);
+    if (payload.password) formData.append("password", payload.password);
+    if (payload.amount) formData.append("deposit_amount", payload.amount);
+    if (payload.imageFile) formData.append("image", payload.imageFile);
+
+    const res = await fetch(`${API_BASE}/update/${id}`, {
+      method: "POST",
+      headers: { ...tokenHeader() },
+      body: formData,
     });
-    let body = await (async () => {
-      try {
-        return await res.json();
-      } catch {
-        return null;
-      }
-    })();
 
-    if (!res.ok) {
-      try {
-        res = await fetch(`${API_URL}/${id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-          body: JSON.stringify(payload),
-        });
-        body = await (async () => {
-          try {
-            return await res.json();
-          } catch {
-            return null;
-          }
-        })();
-      } catch {
-        // noop
-      }
-    }
-
+    const body = await res.json().catch(() => null);
     if (!res.ok) {
       const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
       throw new Error(msg);
     }
-
-    return body?.data ?? body?.row ?? body?.franchise ?? body ?? null;
+    return body?.data ?? body?.franchise ?? body ?? null;
   };
 
   // ---------- Delete ----------
   const deleteFranchiseApi = async (id: string | number) => {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/${id}`, {
+    const res = await fetch(`${API_BASE}/delete/${id}`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      headers: { "Accept": "application/json", ...tokenHeader() },
     });
-    let body = null;
-    try {
-      body = await res.json();
-    } catch {
-      body = null;
-    }
+    const body = await res.json().catch(() => null);
     if (!res.ok) {
       const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
       throw new Error(msg);
@@ -827,7 +832,7 @@ const Franchise: React.FC = () => {
     return true;
   };
 
-  // ---------- Unified submit (create/update) ----------
+  // ---------- Submit handler ----------
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!validate()) {
@@ -841,9 +846,9 @@ const Franchise: React.FC = () => {
       address: form.address.trim(),
       email: form.email.trim(),
       phone: form.phone.trim(),
-      // only include password if provided (required on create)
       ...(form.password.trim() ? { password: form.password.trim() } : {}),
       amount: form.amount.trim(),
+      imageFile: form.imageFile ?? undefined,
     };
 
     setLoading(true);
@@ -866,24 +871,23 @@ const Franchise: React.FC = () => {
 
       try {
         const created = await createFranchise(payload);
-        // replace optimistic with server-provided
         setFranchises((prev) => {
           const withoutOptimistic = prev.filter((p) => p.id !== optimisticId);
           const newItem: FranchiseItem = {
             id: created?.id ?? created?._id ?? created?.franchise_id ?? Date.now(),
             name: created?.name ?? created?.franchise_name ?? payload.name ?? "",
-            businessName: created?.businessName ?? created?.business_name ?? payload.businessName ?? "",
+            businessName: created?.business_name ?? created?.businessName ?? payload.businessName ?? "",
             address: created?.address ?? payload.address ?? "",
             email: created?.email ?? payload.email ?? "",
             phone: created?.phone ?? payload.phone ?? "",
-            amount: created?.amount ?? payload.amount ?? "",
+            amount: created?.deposit_amount ?? created?.amount ?? payload.amount ?? "",
             status: (created?.status ?? "active").toLowerCase(),
+            image_url: created?.image_url ?? created?.image ?? null,
           };
           return [newItem, ...withoutOptimistic];
         });
         toast.success("Franchise created");
       } catch (err: any) {
-        // remove optimistic
         setFranchises((prev) => prev.filter((p) => !String(p.id).startsWith("tmp-")));
         console.error("Create franchise error:", err);
         toast.error(err?.message || "Failed to create franchise");
@@ -892,38 +896,27 @@ const Franchise: React.FC = () => {
         setForm(initialForm);
       }
     } else {
-      // update flow
       const idToUpdate = editingId;
       setIsDrawerOpen(false);
-      // optimistic update snapshot
       const prevSnapshot = [...franchises];
-      setFranchises((prev) =>
-        prev.map((p) => (String(p.id) === String(idToUpdate) ? { ...p, ...(payload as any) } as FranchiseItem : p))
-      );
+      setFranchises((prev) => prev.map((p) => (String(p.id) === String(idToUpdate) ? { ...p, ...payload } as FranchiseItem : p)));
 
       try {
         const updated = await updateFranchise(idToUpdate, payload);
-        // merge server returned (if any)
-        setFranchises((prev) =>
-          prev.map((p) =>
-            String(p.id) === String(idToUpdate)
-              ? {
-                  id: updated?.id ?? updated?._id ?? updated?.franchise_id ?? p.id,
-                  name: updated?.name ?? updated?.franchise_name ?? payload.name ?? p.name,
-                  businessName: updated?.businessName ?? updated?.business_name ?? payload.businessName ?? p.businessName,
-                  address: updated?.address ?? payload.address ?? p.address,
-                  email: updated?.email ?? payload.email ?? p.email,
-                  phone: updated?.phone ?? payload.phone ?? p.phone,
-                  amount: updated?.amount ?? payload.amount ?? p.amount,
-                  status: (updated?.status ?? p.status ?? "active").toLowerCase(),
-                }
-              : p
-          )
-        );
+        setFranchises((prev) => prev.map((p) => (String(p.id) === String(idToUpdate) ? {
+          id: updated?.id ?? updated?._id ?? updated?.franchise_id ?? p.id,
+          name: updated?.name ?? updated?.franchise_name ?? payload.name ?? p.name,
+          businessName: updated?.business_name ?? updated?.businessName ?? payload.businessName ?? p.businessName,
+          address: updated?.address ?? payload.address ?? p.address,
+          email: updated?.email ?? payload.email ?? p.email,
+          phone: updated?.phone ?? payload.phone ?? p.phone,
+          amount: updated?.deposit_amount ?? updated?.amount ?? payload.amount ?? p.amount,
+          status: (updated?.status ?? p.status ?? "active").toLowerCase(),
+          image_url: updated?.image_url ?? updated?.image ?? p.image_url ?? null,
+        } : p)));
         toast.success("Franchise updated");
       } catch (err: any) {
         console.error("Update franchise error:", err);
-        // rollback
         setFranchises(prevSnapshot);
         toast.error(err?.message || "Failed to update franchise");
       } finally {
@@ -934,11 +927,10 @@ const Franchise: React.FC = () => {
     }
   };
 
-  // ---------- Delete handler ----------
+  // ---------- Delete ----------
   const handleDelete = async (id: string | number) => {
     const yes = window.confirm("Delete this franchise? This action cannot be undone.");
     if (!yes) return;
-    // optimistic remove
     const prevSnapshot = [...franchises];
     setFranchises((prev) => prev.filter((f) => String(f.id) !== String(id)));
     try {
@@ -955,6 +947,7 @@ const Franchise: React.FC = () => {
   return (
     <div className="p-4 md:p-6 space-y-6">
       <Toaster position="top-right" />
+
       <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4">
         <div className="flex-1 min-w-0">
           <h1 className="text-2xl md:text-3xl font-semibold text-gray-800 truncate">Franchise</h1>
@@ -1046,7 +1039,7 @@ const Franchise: React.FC = () => {
                       <tr key={String(f.id)} className="border-b hover:bg-gray-50">
                         <td className="py-2 px-3">{f.name}</td>
                         <td className="py-2 px-3">{f.businessName}</td>
-                        <td className="py-2 px-3">{f.address}</td>
+                        <td className="py-2 px-3 truncate max-w-[220px]">{f.address}</td>
                         <td className="py-2 px-3">{f.email}</td>
                         <td className="py-2 px-3">{f.phone}</td>
                         <td className="py-2 px-3">{f.amount || "-"}</td>
@@ -1143,16 +1136,18 @@ const Franchise: React.FC = () => {
                 {errors.address && <p className="text-sm text-red-600 mt-1">{errors.address}</p>}
               </div>
 
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
-                <input id="email" type="email" value={form.email} onChange={handleChange("email")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                {errors.email && <p className="text-sm text-red-600 mt-1">{errors.email}</p>}
-              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="email" className="block text-sm font-medium text-gray-700">Email</label>
+                  <input id="email" type="email" value={form.email} onChange={handleChange("email")} className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  {errors.email && <p className="text-sm text-red-600 mt-1">{errors.email}</p>}
+                </div>
 
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Phone</label>
-                <input id="phone" value={form.phone} onChange={handleChange("phone")} placeholder="+919876543210" className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
-                {errors.phone && <p className="text-sm text-red-600 mt-1">{errors.phone}</p>}
+                <div>
+                  <label htmlFor="phone" className="block text-sm font-medium text-gray-700">Phone</label>
+                  <input id="phone" value={form.phone} onChange={handleChange("phone")} placeholder="+919876543210" className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  {errors.phone && <p className="text-sm text-red-600 mt-1">{errors.phone}</p>}
+                </div>
               </div>
 
               <div>
@@ -1162,9 +1157,15 @@ const Franchise: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Amount</label>
+                <label htmlFor="amount" className="block text-sm font-medium text-gray-700">Deposit Amount</label>
                 <input id="amount" value={form.amount} onChange={handleChange("amount")} placeholder="e.g. 1000 or 99.99" className="mt-1 block w-full rounded-md border px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                 {errors.amount && <p className="text-sm text-red-600 mt-1">{errors.amount}</p>}
+              </div>
+
+              <div>
+                <label htmlFor="image" className="block text-sm font-medium text-gray-700">Image (optional)</label>
+                <input id="image" type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-600" />
+                {form.imageFile && <p className="text-xs text-slate-500 mt-1">Selected: {form.imageFile.name}</p>}
               </div>
             </div>
 
