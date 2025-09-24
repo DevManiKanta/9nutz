@@ -1,30 +1,35 @@
 
-
 // import React, { useEffect, useRef, useState } from "react";
 // import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 // import { Button } from "@/components/ui/button";
 // import { Plus, Package, X, RefreshCw, Trash2, Edit3 } from "lucide-react";
 // import toast, { Toaster } from "react-hot-toast";
-
+// import api from "@/api/axios";
 // type Product = {
 //   id: string | number;
 //   name: string;
-//   price: string; // original price
+//   price: string;
 //   grams?: string;
-//   discount_amount?: string; // e.g. "200.00"
-//   discount_price?: string; // e.g. "800.00"
-//   image_url?: string; // full URL for image
-//   // legacy/compat
+//   discount_amount?: string;
+//   discount_price?: string;
+//   image_url?: string;
 //   category?: string;
 //   image?: string;
-//   discountPrice?: string; // kept for compatibility with existing code paths
+//   discountPrice?: string;
 //   gram?: string;
 // };
 
-// const API_BASE = "http://192.168.1.6:8000/api"; // your base url
+// type CategoryItem = {
+//   id: string;
+//   name: string;
+// };
+
+// const API_BASE = "http://192.168.29.100:8000/api"; 
 
 // const Products: React.FC = () => {
 //   const [products, setProducts] = useState<Product[]>([]);
+//   const [categories, setCategories] = useState<CategoryItem[]>([]);
+
 //   // Add/Edit Drawer state
 //   const [isOpen, setIsOpen] = useState(false);
 //   const [isMounted, setIsMounted] = useState(false);
@@ -66,6 +71,26 @@
 //     }
 //   };
 
+//   // safe helper: add category to categories list (dedupe by id)
+//   const addCategoryFromRaw = (rawCategory: any) => {
+//     if (!rawCategory) return;
+//     let id: string | null = null;
+//     let name: string | null = null;
+
+//     if (typeof rawCategory === "object") {
+//       id = String(rawCategory.id ?? rawCategory._id ?? rawCategory.category_id ?? rawCategory.categoryId ?? null);
+//       name = String(rawCategory.name ?? rawCategory.title ?? rawCategory.category_name ?? rawCategory.label ?? "");
+//     } else if (rawCategory !== null && rawCategory !== undefined) {
+//       id = String(rawCategory);
+//     }
+
+//     if (!id) return;
+//     setCategories((prev) => {
+//       if (prev.some((c) => String(c.id) === String(id))) return prev;
+//       return [...prev, { id, name: name ?? id }];
+//     });
+//   };
+
 //   // normalization helper (map API shape to Product)
 //   function normalizeProduct(raw: any): Product {
 //     if (!raw) {
@@ -80,11 +105,27 @@
 //       raw.uid ??
 //       raw.uuid ??
 //       raw.id_str ??
-//       raw.idNumber;
+//       raw.idNumber ??
+//       `local-${Date.now()}`;
 
-//     // prefer explicit API fields you showed: name, price, grams, discount_amount, discount_price, image_url
+//     // extract category id safely (handles when category is an object or a simple id)
+//     let categoryId = "";
+//     const rawCategory = raw.category ?? raw.cat ?? raw.type ?? raw.category_id ?? raw.categoryId ?? null;
+//     if (rawCategory != null) {
+//       if (typeof rawCategory === "object") {
+//         categoryId = String(
+//           rawCategory.id ?? rawCategory._id ?? rawCategory.category_id ?? rawCategory.categoryId ?? ""
+//         );
+//       } else {
+//         categoryId = String(rawCategory);
+//       }
+//     }
+
+//     // If server provided category object, push it to categories list
+//     if (rawCategory) addCategoryFromRaw(rawCategory);
+
 //     const product: Product = {
-//       id: id ?? `local-${Date.now()}`,
+//       id,
 //       name: String(raw.name ?? raw.title ?? raw.productName ?? "Untitled"),
 //       price: String(raw.price ?? raw.amount ?? raw.cost ?? ""),
 //       grams: raw.grams ?? raw.gram ?? raw.weight ?? raw.size ?? "",
@@ -93,17 +134,11 @@
 //         raw.discountAmount ??
 //         raw.discount_amount_formatted ??
 //         raw.discount_amount_str ??
-//         raw.discount_amount ??
 //         undefined,
 //       discount_price:
-//         raw.discount_price ??
-//         raw.discountPrice ??
-//         raw.discount_price_formatted ??
-//         raw.discount_price ??
-//         undefined,
+//         raw.discount_price ?? raw.discountPrice ?? raw.discount_price_formatted ?? undefined,
 //       image_url: raw.image_url ?? raw.imageUrl ?? raw.image ?? raw.photo ?? undefined,
-//       // keep old keys too for compatibility with UI code that referenced them
-//       category: String(raw.category ?? raw.cat ?? raw.type ?? raw.category_id ?? ""),
+//       category: categoryId,
 //       image: raw.image ?? raw.image_url ?? undefined,
 //       discountPrice: raw.discount_price ?? raw.discountPrice ?? undefined,
 //       gram: raw.grams ?? raw.gram ?? undefined,
@@ -140,7 +175,7 @@
 //     }
 //   }, [viewOpen]);
 
-//   // keyboard/focus traps
+//   // keyboard/focus traps (unchanged)
 //   useEffect(() => {
 //     const onKey = (e: KeyboardEvent) => {
 //       if (e.key === "Escape") setIsOpen(false);
@@ -217,6 +252,7 @@
 //       if (!res.ok) {
 //         console.error("Failed to fetch products:", res.status, raw);
 //         toast.error(`Failed to load products (${res.status})`);
+//         setIsLoading(false);
 //         return;
 //       }
 
@@ -227,12 +263,9 @@
 //       else if (Array.isArray(raw.products)) rows = raw.products;
 //       else if (Array.isArray(raw.rows)) rows = raw.rows;
 //       else if (Array.isArray(raw.items)) rows = raw.items;
-//       else if (raw && typeof raw === "object" && Object.keys(raw).length && raw.data && Array.isArray(raw.data)) rows = raw.data;
-//       else {
-//         if (raw && typeof raw === "object" && (raw.id || raw._id || raw.name)) rows = [raw];
-//       }
+//       else if (raw && typeof raw === "object" && (raw.id || raw._id || raw.name)) rows = [raw];
 
-//       const normalized = rows.map(normalizeProduct);
+//       const normalized = rows.map((r) => normalizeProduct(r));
 //       setProducts(normalized);
 //     } catch (err) {
 //       console.error("Network error fetching products:", err);
@@ -253,8 +286,14 @@
 //     if (!form.name.trim()) e.name = "Product name is required";
 //     if (!form.price.trim()) e.price = "Price is required";
 //     if (form.price && !/^[\d,.₹$€£]+$/.test(form.price.trim())) e.price = "Enter a valid price";
+
+//     // Validate category: if categories list exists, ensure a selected id is present. Otherwise require non-empty.
 //     if (!form.category.trim()) e.category = "Category is required";
-//     if (form.category && isNaN(Number(form.category))) e.category = "Category must be a number (category id)";
+//     if (form.category && isNaN(Number(form.category))) {
+//       // allow numeric ids only
+//       e.category = "Category must be a number (category id)";
+//     }
+
 //     if (form.discount_price && !/^[\d,.₹$€£]+$/.test(form.discount_price.trim())) {
 //       e.discount_price = "Enter a valid discount price";
 //     }
@@ -476,16 +515,20 @@
 //   const startEdit = (product: Product) => {
 //     setIsEdit(true);
 //     setEditingId(product.id);
+
+//     // Ensure category is a string id. product.category should already be normalized to id.
+//     const categoryVal = product.category ? String(product.category) : "";
+
 //     setForm({
 //       name: product.name || "",
 //       grams: product.grams ?? product.gram ?? "",
-//       category: product.category ?? "",
+//       category: categoryVal,
 //       price: product.price ?? "",
 //       discount_amount: product.discount_amount ?? "",
 //       discount_price: product.discount_price ?? product.discountPrice ?? "",
 //       image: product.image_url ?? product.image ?? "",
 //     });
-//     setImageFile(null); // if user wants to change image, they'll upload a new file
+//     setImageFile(null);
 //     setIsOpen(true);
 //   };
 
@@ -548,7 +591,6 @@
 //                 <CardHeader className="pb-3">
 //                   <div className="w-full h-36 rounded-lg mb-3 overflow-hidden flex items-center justify-center bg-gradient-to-br from-chart-primary to-chart-accent">
 //                     {product.image_url ? (
-//                       // eslint-disable-next-line @next/next/no-img-element
 //                       <img
 //                         src={product.image_url}
 //                         alt={product.name}
@@ -559,8 +601,6 @@
 //                         }}
 //                       />
 //                     ) : product.image ? (
-//                       // fallback
-//                       // eslint-disable-next-line @next/next/no-img-element
 //                       <img
 //                         src={product.image}
 //                         alt={product.name}
@@ -593,9 +633,7 @@
 
 //                     <div className="text-right">
 //                       <span className="text-sm text-muted-foreground block">Discount</span>
-//                       <div className="text-sm font-semibold text-rose-600">
-//                         {product.discount_price ?? "-"}
-//                       </div>
+//                       <div className="text-sm font-semibold text-rose-600">{product.discount_price ?? "-"}</div>
 //                       {product.discount_amount && (
 //                         <div className="text-xs text-muted-foreground">Saved: {product.discount_amount}</div>
 //                       )}
@@ -699,15 +737,33 @@
 
 //                     <div>
 //                       <label className="block text-sm font-medium mb-1">
-//                         Category (id) <span className="text-red-500">*</span>
+//                         Category <span className="text-red-500">*</span>
 //                       </label>
-//                       <input
-//                         aria-label="Category"
-//                         className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.category ? "border-red-400" : "border-muted"}`}
-//                         value={form.category}
-//                         onChange={(e) => handleChange("category", e.target.value)}
-//                         placeholder="e.g. 6"
-//                       />
+
+//                       {categories.length > 0 ? (
+//                         <select
+//                           aria-label="Category"
+//                           value={form.category}
+//                           onChange={(e) => handleChange("category", e.target.value)}
+//                           className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.category ? "border-red-400" : "border-muted"}`}
+//                         >
+//                           <option value="">-- Select category --</option>
+//                           {categories.map((c) => (
+//                             <option key={c.id} value={c.id}>
+//                               {c.name ?? c.id}
+//                             </option>
+//                           ))}
+//                         </select>
+//                       ) : (
+//                         <input
+//                           aria-label="Category"
+//                           className={`block w-full border rounded-md p-2 focus:outline-none focus:ring ${errors.category ? "border-red-400" : "border-muted"}`}
+//                           value={form.category}
+//                           onChange={(e) => handleChange("category", e.target.value)}
+//                           placeholder="e.g. 6"
+//                         />
+//                       )}
+
 //                       {errors.category && <p className="text-xs text-red-500 mt-1">{errors.category}</p>}
 //                     </div>
 
@@ -825,17 +881,14 @@
 //                     <label className="block text-sm font-medium mb-1">Product Name</label>
 //                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.name || "-"}</div>
 //                   </div>
-
 //                   <div>
 //                     <label className="block text-sm font-medium mb-1">Price</label>
 //                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.price || "-"}</div>
 //                   </div>
-
 //                   <div>
 //                     <label className="block text-sm font-medium mb-1">Discount Price</label>
 //                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.discount_price || "-"}</div>
 //                   </div>
-
 //                   <div>
 //                     <label className="block text-sm font-medium mb-1">Discount Amount</label>
 //                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.discount_amount || "-"}</div>
@@ -844,6 +897,11 @@
 //                   <div>
 //                     <label className="block text-sm font-medium mb-1">Grams</label>
 //                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.grams || "-"}</div>
+//                   </div>
+
+//                   <div>
+//                     <label className="block text-sm font-medium mb-1">Category ID</label>
+//                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.category || "-"}</div>
 //                   </div>
 
 //                   <div className="flex items-center justify-between mt-4">
@@ -866,7 +924,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus, Package, X, RefreshCw, Trash2, Edit3 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-
+import api from '../api/axios'
+import { fetchProducts, addProduct, updateProduct, removeProduct } from "@/redux/slices/productsSlice";
 type Product = {
   id: string | number;
   name: string;
@@ -875,7 +934,6 @@ type Product = {
   discount_amount?: string;
   discount_price?: string;
   image_url?: string;
-  // stored category id as string
   category?: string;
   image?: string;
   discountPrice?: string;
@@ -884,10 +942,8 @@ type Product = {
 
 type CategoryItem = {
   id: string;
-  name: string;
+  name?: string;
 };
-
-const API_BASE = "http://192.168.1.6:8000/api"; // your base url
 
 const Products: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -910,7 +966,7 @@ const Products: React.FC = () => {
     price: "",
     discount_amount: "",
     discount_price: "",
-    image: "", // preview data-url or existing image_url
+    image: "",
   });
   const [errors, setErrors] = useState<Partial<Record<keyof typeof form, string>>>({});
   // actual file object for upload (optional)
@@ -923,16 +979,6 @@ const Products: React.FC = () => {
   const addBtnRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const viewDrawerRef = useRef<HTMLDivElement | null>(null);
-
-  // ---------------- Token helper ----------------
-  const getToken = (): string | null => {
-    try {
-      return localStorage.getItem("token");
-    } catch (err) {
-      console.warn("Unable to read token from localStorage", err);
-      return null;
-    }
-  };
 
   // safe helper: add category to categories list (dedupe by id)
   const addCategoryFromRaw = (rawCategory: any) => {
@@ -993,11 +1039,7 @@ const Products: React.FC = () => {
       price: String(raw.price ?? raw.amount ?? raw.cost ?? ""),
       grams: raw.grams ?? raw.gram ?? raw.weight ?? raw.size ?? "",
       discount_amount:
-        raw.discount_amount ??
-        raw.discountAmount ??
-        raw.discount_amount_formatted ??
-        raw.discount_amount_str ??
-        undefined,
+        raw.discount_amount ?? raw.discountAmount ?? raw.discount_amount_formatted ?? raw.discount_amount_str ?? undefined,
       discount_price:
         raw.discount_price ?? raw.discountPrice ?? raw.discount_price_formatted ?? undefined,
       image_url: raw.image_url ?? raw.imageUrl ?? raw.image ?? raw.photo ?? undefined,
@@ -1085,84 +1127,82 @@ const Products: React.FC = () => {
     return () => window.removeEventListener("keydown", onKey);
   }, [viewOpen]);
 
-  // --------- Fetch initial products from API ----------
+  // --------- API calls (Axios) ----------
   const fetchProducts = async () => {
     setIsLoading(true);
     try {
-      const token = getToken();
-      if (!token) {
-        toast.error("Missing auth token. Please login.");
-        setIsLoading(false);
-        return;
-      }
-
-      const res = await fetch(`${API_BASE}/admin/products/show`, {
-        method: "GET",
-        headers: {
-          Accept: "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const raw = await (async () => {
-        try {
-          return await res.json();
-        } catch {
-          return null;
-        }
-      })();
-
-      if (!res.ok) {
-        console.error("Failed to fetch products:", res.status, raw);
-        toast.error(`Failed to load products (${res.status})`);
-        setIsLoading(false);
-        return;
-      }
-
-      // server might return array or { data: [...] } etc.
+      const res = await api.get("/admin/products/show");
+      const body = res.data;
       let rows: any[] = [];
-      if (Array.isArray(raw)) rows = raw;
-      else if (Array.isArray(raw.data)) rows = raw.data;
-      else if (Array.isArray(raw.products)) rows = raw.products;
-      else if (Array.isArray(raw.rows)) rows = raw.rows;
-      else if (Array.isArray(raw.items)) rows = raw.items;
-      else if (raw && typeof raw === "object" && (raw.id || raw._id || raw.name)) rows = [raw];
+      if (Array.isArray(body)) rows = body;
+      else if (Array.isArray(body.data)) rows = body.data;
+      else if (Array.isArray(body.products)) rows = body.products;
+      else if (Array.isArray(body.rows)) rows = body.rows;
+      else if (Array.isArray(body.items)) rows = body.items;
+      else if (body && typeof body === "object" && (body.id || body._id || body.name)) rows = [body];
 
       const normalized = rows.map((r) => normalizeProduct(r));
       setProducts(normalized);
-    } catch (err) {
-      console.error("Network error fetching products:", err);
-      toast.error("Network error while loading products");
+    } catch (err: any) {
+      console.error("Failed to fetch products", err);
+      toast.error("Failed to load products");
+      setProducts([]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  const createProduct = async (payload: Partial<Product>, file?: File | null) => {
+    const fd = new FormData();
+    if (payload.name) fd.append("name", String(payload.name));
+    if (payload.price) fd.append("price", String(payload.price));
+    if (payload.discount_price) fd.append("discount_price", String(payload.discount_price));
+    if (payload.discount_amount) fd.append("discount_amount", String(payload.discount_amount));
+    if (payload.grams) fd.append("grams", String(payload.grams));
+    if (payload.category) fd.append("category", String(payload.category));
+    if (file) fd.append("image", file);
+
+    const res = await api.post("/admin/products/add", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    const created = res.data?.data ?? res.data?.product ?? res.data;
+    return normalizeProduct(created);
+  };
+
+  const updateProduct = async (id: string | number, payload: Partial<Product>, file?: File | null) => {
+    const fd = new FormData();
+    if (payload.name !== undefined) fd.append("name", String(payload.name));
+    if (payload.price !== undefined) fd.append("price", String(payload.price));
+    if (payload.discount_price !== undefined) fd.append("discount_price", String(payload.discount_price));
+    if (payload.discount_amount !== undefined) fd.append("discount_amount", String(payload.discount_amount));
+    if (payload.grams !== undefined) fd.append("grams", String(payload.grams));
+    if (payload.category !== undefined) fd.append("category", String(payload.category));
+    if (file) fd.append("image", file);
+
+    const res = await api.post(`/admin/products/update/${id}`, fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    const updated = res.data?.data ?? res.data?.product ?? res.data;
+    return normalizeProduct(updated);
+  };
+
+  const deleteProduct = async (id: string | number) => {
+    await api.delete(`/admin/products/delete/${id}`);
+    return true;
+  };
+
+  // ----------------- useEffects -----------------
   useEffect(() => {
     void fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Validation adjusted to new field names
+  // ----------------- Form Helpers -----------------
   const validate = () => {
     const e: Partial<Record<keyof typeof form, string>> = {};
     if (!form.name.trim()) e.name = "Product name is required";
     if (!form.price.trim()) e.price = "Price is required";
-    if (form.price && !/^[\d,.₹$€£]+$/.test(form.price.trim())) e.price = "Enter a valid price";
-
-    // Validate category: if categories list exists, ensure a selected id is present. Otherwise require non-empty.
     if (!form.category.trim()) e.category = "Category is required";
-    if (form.category && isNaN(Number(form.category))) {
-      // allow numeric ids only
-      e.category = "Category must be a number (category id)";
-    }
-
-    if (form.discount_price && !/^[\d,.₹$€£]+$/.test(form.discount_price.trim())) {
-      e.discount_price = "Enter a valid discount price";
-    }
-    if (form.discount_amount && !/^[\d,.₹$€£]+$/.test(form.discount_amount.trim())) {
-      e.discount_amount = "Enter a valid discount amount";
-    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -1200,108 +1240,7 @@ const Products: React.FC = () => {
     reader.readAsDataURL(file);
   };
 
-  // create product (POST /admin/products/add) — send FormData
-  const createProduct = async (payload: Partial<Product>, file?: File | null) => {
-    const fd = new FormData();
-    if (payload.name) fd.append("name", String(payload.name));
-    if (payload.price) fd.append("price", String(payload.price));
-    if (payload.discount_price) fd.append("discount_price", String(payload.discount_price));
-    if (payload.discount_amount) fd.append("discount_amount", String(payload.discount_amount));
-    if (payload.grams) fd.append("grams", String(payload.grams));
-    if (payload.category) fd.append("category", String(payload.category));
-    if (file) fd.append("image", file);
-
-    const token = getToken();
-    if (!token) throw new Error("Missing auth token (please login)");
-
-    const res = await fetch(`${API_BASE}/admin/products/add`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: fd,
-    });
-
-    const body = await (async () => {
-      try {
-        return await res.json();
-      } catch {
-        return null;
-      }
-    })();
-
-    if (!res.ok) {
-      const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
-      throw new Error(msg);
-    }
-    const createdRaw = body?.data ?? body?.product ?? body ?? null;
-    return normalizeProduct(createdRaw);
-  };
-
-  // update product (POST /admin/products/update/:id)
-  const updateProduct = async (id: string | number, payload: Partial<Product>, file?: File | null) => {
-    const fd = new FormData();
-    if (payload.name !== undefined) fd.append("name", String(payload.name));
-    if (payload.price !== undefined) fd.append("price", String(payload.price));
-    if (payload.discount_price !== undefined) fd.append("discount_price", String(payload.discount_price));
-    if (payload.discount_amount !== undefined) fd.append("discount_amount", String(payload.discount_amount));
-    if (payload.grams !== undefined) fd.append("grams", String(payload.grams));
-    if (payload.category !== undefined) fd.append("category", String(payload.category));
-    if (file) fd.append("image", file);
-
-    const token = getToken();
-    if (!token) throw new Error("Missing auth token (please login)");
-
-    const res = await fetch(`${API_BASE}/admin/products/update/${id}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      body: fd,
-    });
-
-    const body = await (async () => {
-      try {
-        return await res.json();
-      } catch {
-        return null;
-      }
-    })();
-
-    if (!res.ok) {
-      const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
-      throw new Error(msg);
-    }
-    const updatedRaw = body?.data ?? body?.product ?? body ?? null;
-    return normalizeProduct(updatedRaw);
-  };
-
-  // delete (DELETE /admin/products/delete/:id)
-  const deleteProduct = async (id: string | number) => {
-    const token = getToken();
-    if (!token) throw new Error("Missing auth token (please login)");
-
-    const res = await fetch(`${API_BASE}/admin/products/delete/${id}`, {
-      method: "DELETE",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
-    });
-    let body = null;
-    try {
-      body = await res.json();
-    } catch {
-      body = null;
-    }
-    if (!res.ok) {
-      const msg = (body && (body.message || body.error)) || `Server error (${res.status})`;
-      throw new Error(msg);
-    }
-    return true;
-  };
-
-  // Unified submit: handles create + update
+  // create / update handlers
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!validate()) {
@@ -1315,7 +1254,6 @@ const Products: React.FC = () => {
       discount_price: form.discount_price?.trim() || undefined,
       discount_amount: form.discount_amount?.trim() || undefined,
       grams: form.grams?.trim() || undefined,
-      // category kept as string id
       category: form.category.trim() || undefined,
       image_url: form.image?.trim() || undefined,
     };
@@ -1325,9 +1263,7 @@ const Products: React.FC = () => {
       if (isEdit && editingId != null) {
         const saved = await updateProduct(editingId, payload, imageFile);
         if (saved) {
-          setProducts((prev) =>
-            prev.map((p) => (String(p.id) === String(editingId) ? { ...(p as Product), ...(saved as Product) } : p))
-          );
+          setProducts((prev) => prev.map((p) => (String(p.id) === String(editingId) ? { ...(p as Product), ...(saved as Product) } : p)));
           if (selectedProduct && String(selectedProduct.id) === String(editingId)) {
             setSelectedProduct((prev) => (prev ? { ...prev, ...(saved as Product) } : prev));
           }
@@ -1350,7 +1286,7 @@ const Products: React.FC = () => {
       setIsOpen(false);
     } catch (err: any) {
       console.error("Save product error:", err);
-      toast.error(err?.message || "Failed to save product");
+      toast.error(err?.response?.data?.message ?? err?.message ?? "Failed to save product");
     } finally {
       setIsSubmitting(false);
       setImageFile(null);
@@ -1358,7 +1294,7 @@ const Products: React.FC = () => {
   };
 
   const handleChange = (key: keyof typeof form, value: string | boolean) => {
-    setForm((f) => ({ ...f, [key]: value }));
+    setForm((f) => ({ ...f, [key]: value as string }));
     setErrors((err) => ({ ...err, [key]: undefined }));
   };
 
@@ -1406,7 +1342,7 @@ const Products: React.FC = () => {
       if (selectedProduct?.id && String(selectedProduct.id) === String(id)) closeView();
     } catch (err: any) {
       console.error("Delete error:", err);
-      toast.error(err?.message || "Failed to delete product");
+      toast.error(err?.response?.data?.message ?? err?.message ?? "Failed to delete product");
     }
   };
 
@@ -1419,7 +1355,7 @@ const Products: React.FC = () => {
   return (
     <>
       <Toaster position="top-right" toastOptions={{ duration: 2500 }} />
-      <div className="space-y-8">
+      <div className="space-y-8 p-6 max-w-7xl mx-auto">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Products</h1>
@@ -1744,17 +1680,14 @@ const Products: React.FC = () => {
                     <label className="block text-sm font-medium mb-1">Product Name</label>
                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.name || "-"}</div>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium mb-1">Price</label>
                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.price || "-"}</div>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium mb-1">Discount Price</label>
                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.discount_price || "-"}</div>
                   </div>
-
                   <div>
                     <label className="block text-sm font-medium mb-1">Discount Amount</label>
                     <div className="rounded-md border p-2 bg-gray-50">{selectedProduct?.discount_amount || "-"}</div>
@@ -1785,6 +1718,7 @@ const Products: React.FC = () => {
   );
 };
 export default Products;
+
 
 
 

@@ -60,9 +60,12 @@ import RentVehiclePaymentsList from "./pages/RentVehiclePaymentsList";
 import FranchiseRequests from "./pages/FranchiseRequests";
 import CommingSoon from "./pages/CommingSoon";
 import PublicRoute from "@/components/auth/ProtectedRoute";
+import { Provider } from "react-redux";
+import { store } from "@/redux/store";
 const queryClient = new QueryClient();
 
 const App = () => (
+     <Provider store={store}>
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -70,12 +73,9 @@ const App = () => (
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-
             <Route path="/login" element={<LoginForm />} />
-            
             {/* <Route path="/signup" element={<SignupForm />} /> */}
             <Route path="/forgot-password" element={<ForgotPasswordForm />} />
-
             {/* Protected Routes */}
             <Route
               path="/dashboard"
@@ -177,8 +177,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-
-            {/* ---------- SKU routes (new) ---------- */}
             <Route
               path="/sku/list"
               element={
@@ -209,7 +207,6 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
-            {/* ---------- end SKU routes ---------- */}
             <Route
               path="/OrderReport"
               element={
@@ -553,6 +550,7 @@ const App = () => (
       </AuthProvider>
     </TooltipProvider>
   </QueryClientProvider>
+  </Provider>
 );
 
 export default App;

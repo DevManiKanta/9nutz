@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Plus, X, Edit2, Trash2 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
-const API_BASE = "http://192.168.1.6:8000/api";
+const API_BASE = "http://192.168.29.100:8000/api";
 const ENDPOINTS = {
   list: `${API_BASE}/admin/categories/show`,
   create: `${API_BASE}/admin/categories/add`,

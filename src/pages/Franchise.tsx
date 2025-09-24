@@ -27,7 +27,7 @@ const initialForm: FranchiseForm = {
   imageFile: null,
 };
 
-const API_HOST = "http://192.168.1.6:8000/api"; // change to your host
+const API_HOST = "http://192.168.29.100:8000/api"; // change to your host
 const API_BASE = `${API_HOST}/admin/franchise`;
 
 type FranchiseItem = {

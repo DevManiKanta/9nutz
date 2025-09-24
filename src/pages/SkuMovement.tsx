@@ -1,339 +1,435 @@
-import React, { useMemo, useState } from "react";
+"use client";
 
-/**
- * SkuMovement component
- *
- * Features:
- * - Responsive layout matching provided screenshot
- * - Select item + start/end date inputs
- * - Inline validation (required item, valid dates, start <= end)
- * - Submit populates a table with sample movement rows (you can replace with API call)
- * - Export button generates CSV from current table rows
- *
- * Requirements:
- * - Tailwind CSS (used for all styling)
- *
- * Replace sample data generation with a fetch to your backend if needed.
- */
+import React, { useEffect, useState } from "react";
+import { Plus, Edit3, Trash2, X, RefreshCw } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
+import api from "@/api/axios";
+import type { AxiosError } from "axios";
 
-type MovementRow = {
-  date: string;
-  openingStock: number;
-  punchedQty: number;
-  salesReturn: number;
-  orderCanceled: number;
-  purchase: number;
-  purchaseReturn: number;
-  goodsOut: number;
-  goodsIn: number;
-  splitOut: number;
-  splitIn: number;
-  slocShrinkage: number;
-  physicalStock: number;
-  closingBal: number;
+type Vendor = {
+  id: string | number;
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
 };
 
-const SAMPLE_SKUS = [
-  { id: "SKU-001", label: "Rice - 5kg (SKU-001)" },
-  { id: "SKU-002", label: "Wheat - 10kg (SKU-002)" },
-  { id: "SKU-003", label: "Sugar - 1kg (SKU-003)" },
-];
+const SkuMovement: React.FC = () => {
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<Vendor | null>(null);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", address: "" });
+  const [errors, setErrors] = useState<{ [k: string]: string }>({});
+  const [deleteTarget, setDeleteTarget] = useState<Vendor | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
-function generateSampleRows(start: string, end: string): MovementRow[] {
-  // produce a row per date between start and end (inclusive), with sample numbers
-  const s = new Date(start);
-  const e = new Date(end);
-  const rows: MovementRow[] = [];
-  const dayMs = 24 * 60 * 60 * 1000;
-  for (let t = s.getTime(); t <= e.getTime(); t += dayMs) {
-    const d = new Date(t);
-    const dateStr = d.toLocaleDateString("en-GB"); // dd-mm-yyyy as in screenshot
-    // sample random-ish numbers (deterministic-ish)
-    const opening = Math.floor(100 + Math.abs(Math.sin(t / 1e8) * 300));
-    const punched = Math.floor(Math.abs(Math.cos(t / 1e8) * 50));
-    const salesReturn = Math.floor(Math.abs(Math.sin(t / 1.3e8) * 10));
-    const orderCanceled = Math.floor(Math.abs(Math.cos(t / 1.7e8) * 5));
-    const purchase = Math.floor(Math.abs(Math.sin(t / 2.1e8) * 60));
-    const purchaseReturn = Math.floor(Math.abs(Math.cos(t / 2.5e8) * 4));
-    const goodsOut = Math.max(0, Math.floor(punched * 0.8));
-    const goodsIn = Math.floor(purchase * 0.9);
-    const splitOut = Math.floor(Math.abs(Math.sin(t / 3e8) * 8));
-    const splitIn = Math.floor(Math.abs(Math.cos(t / 3.5e8) * 6));
-    const sloc = Math.floor(Math.abs(Math.sin(t / 4e8) * 2));
-    const physical = opening + goodsIn - goodsOut - sloc + salesReturn + splitIn - splitOut;
-    const closing = physical; // simplified
-    rows.push({
-      date: dateStr,
-      openingStock: opening,
-      punchedQty: punched,
-      salesReturn,
-      orderCanceled,
-      purchase,
-      purchaseReturn,
-      goodsOut,
-      goodsIn,
-      splitOut,
-      splitIn,
-      slocShrinkage: sloc,
-      physicalStock: physical,
-      closingBal: closing,
-    });
+  useEffect(() => {
+    void fetchVendors();
+  }, []);
+
+  // Helper: robust error formatter for Axios/pure errors
+  function formatAxiosError(err: unknown) {
+    // default fallback
+    const fallback = { message: "An unknown error occurred", details: null as any, status: undefined as number | undefined };
+    try {
+      if (!err) return fallback;
+
+      // AxiosError shape
+      const ae = err as AxiosError & { response?: any; request?: any };
+      if (ae && (ae.isAxiosError || ae.response || ae.request)) {
+        const status = ae.response?.status;
+        // prefer message from response payload
+        const data = ae.response?.data;
+        let message = ae.message || "Request failed";
+        // common server message fields
+        if (data) {
+          if (typeof data === "string") message = data;
+          else if (data.message) message = data.message;
+          else if (data.error) message = data.error;
+          else if (data.errors && typeof data.errors === "string") message = data.errors;
+          // else keep ae.message
+        }
+        return { message: String(message), details: data ?? ae.response ?? ae.request ?? ae.stack, status };
+      }
+
+      // plain Error
+      if (err instanceof Error) {
+        return { message: err.message, details: err.stack, status: undefined };
+      }
+
+      // unknown object or string
+      if (typeof err === "string") return { message: err, details: null, status: undefined };
+      return { message: "Unknown error", details: JSON.stringify(err), status: undefined };
+    } catch (parseErr) {
+      return { message: "Error while parsing error", details: parseErr, status: undefined };
+    }
   }
-  return rows;
-}
 
-export default function SkuMovement() {
-  const todayISO = new Date().toISOString().slice(0, 10);
-  const [selectedSku, setSelectedSku] = useState<string>("");
-  const [startDate, setStartDate] = useState<string>(todayISO);
-  const [endDate, setEndDate] = useState<string>(todayISO);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [rows, setRows] = useState<MovementRow[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const fetchVendors = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/admin/settings/vendors/show");
+      const body = res.data;
+      const rows: Vendor[] = Array.isArray(body)
+        ? body
+        : body?.data ?? body?.vendors ?? [];
+      setVendors(rows);
+    } catch (err: unknown) {
+      const { message, details, status } = formatAxiosError(err);
+      console.error("Failed to load vendors:", { message, status, details, raw: err });
+      // user friendly message
+      if (status === 401) {
+        toast.error("Unauthorized — please login again.");
+        // optionally: logout or redirect
+      } else {
+        toast.error(message || "Failed to load vendor list");
+      }
+      setVendors([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ name: "", email: "", phone: "", address: "" });
+    setErrors({});
+    setModalOpen(true);
+  };
+
+  const openEdit = (it: Vendor) => {
+    setEditing(it);
+    setForm({
+      name: it.name,
+      email: it.email,
+      phone: it.phone,
+      address: it.address,
+    });
+    setErrors({});
+    setModalOpen(true);
+  };
 
   const validate = () => {
-    const e: Record<string, string> = {};
-    if (!selectedSku) e.selectedSku = "Please select an item.";
-    if (!startDate) e.startDate = "Start date is required.";
-    if (!endDate) e.endDate = "End date is required.";
-    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-      e.dateRange = "Start date must be the same or earlier than end date.";
-    }
+    const e: { [k: string]: string } = {};
+    if (!form.name.trim()) e.name = "Name is required";
+    if (!form.email.trim()) e.email = "Email is required";
+    if (!form.phone.trim()) e.phone = "Phone is required";
+    if (!form.address.trim()) e.address = "Address is required";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  const onSubmit = (ev?: React.FormEvent) => {
-    ev?.preventDefault();
-    if (!validate()) return;
-    setIsSubmitting(true);
+  // attempt to extract form-field errors from server response (common shapes)
+  function extractFieldErrors(responseData: any): { [k: string]: string } | null {
+    if (!responseData) return null;
+    // Laravel-style: errors: { field: [msg, ...] }
+    if (responseData.errors && typeof responseData.errors === "object") {
+      const out: { [k: string]: string } = {};
+      for (const k of Object.keys(responseData.errors)) {
+        const val = responseData.errors[k];
+        if (Array.isArray(val)) out[k] = String(val[0]);
+        else out[k] = String(val);
+      }
+      return out;
+    }
+    // Generic validation object
+    if (responseData.validation && typeof responseData.validation === "object") {
+      const out: { [k: string]: string } = {};
+      for (const k of Object.keys(responseData.validation)) {
+        const val = responseData.validation[k];
+        out[k] = Array.isArray(val) ? String(val[0]) : String(val);
+      }
+      return out;
+    }
+    // Field-level messages (e.g. { name: "required", email: "invalid" })
+    const possibleFields = ["name", "email", "phone", "address"];
+    const out: { [k: string]: string } = {};
+    let found = false;
+    for (const f of possibleFields) {
+      if (responseData[f]) {
+        out[f] = String(responseData[f]);
+        found = true;
+      }
+    }
+    return found ? out : null;
+  }
 
-    // simulate fetch -> replace with your API call
-    setTimeout(() => {
-      const generated = generateSampleRows(startDate, endDate);
-      setRows(generated);
-      setIsSubmitting(false);
-      setErrors({});
-    }, 350);
-  };
-
-  // Export current rows to CSV (download)
-  const exportCsv = () => {
-    if (rows.length === 0) {
-      // simple inline notification: set an error message (or use your Toaster)
-      setErrors({ export: "No data to export. Submit to populate table." });
-      setTimeout(() => setErrors((p) => ({ ...p, export: undefined })), 3000);
+  const handleSave = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!validate()) {
+      toast.error("Fix validation errors");
       return;
     }
-    const headers = [
-      "#",
-      "Date",
-      "Opening Stock",
-      "Punched Qty",
-      "Sales Return",
-      "Order Canceled",
-      "Purchase",
-      "Purchase Return",
-      "Goods Out",
-      "Goods In",
-      "Split Out",
-      "Split In",
-      "SLOC Shrinkage",
-      "Physical Stock",
-      "Closing Bal",
-    ];
-    const lines = rows.map((r, idx) =>
-      [
-        idx + 1,
-        r.date,
-        r.openingStock,
-        r.punchedQty,
-        r.salesReturn,
-        r.orderCanceled,
-        r.purchase,
-        r.purchaseReturn,
-        r.goodsOut,
-        r.goodsIn,
-        r.splitOut,
-        r.splitIn,
-        r.slocShrinkage,
-        r.physicalStock,
-        r.closingBal,
-      ].join(",")
-    );
-    const csv = [headers.join(","), ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const fileName = `sku_movement_${selectedSku || "all"}_${startDate}_to_${endDate}.csv`;
-    a.setAttribute("download", fileName);
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    setSaving(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        address: form.address.trim(),
+      };
+
+      if (editing) {
+        const res = await api.post(`/admin/settings/vendors/update/${editing.id}`, payload);
+        const updated = res.data?.data ?? res.data?.vendor ?? payload;
+        setVendors((prev) =>
+          prev.map((v) =>
+            String(v.id) === String(editing.id)
+              ? { ...editing, ...updated }
+              : v
+          )
+        );
+        toast.success("Vendor updated");
+      } else {
+        const res = await api.post("/admin/settings/vendors/add", payload);
+        const created = res.data?.data ?? res.data?.vendor ?? payload;
+        setVendors((prev) => [created, ...prev]);
+        toast.success("Vendor added");
+      }
+
+      setModalOpen(false);
+      setEditing(null);
+      setForm({ name: "", email: "", phone: "", address: "" });
+    } catch (err: unknown) {
+      const { message, details, status } = formatAxiosError(err);
+      console.error("Save vendor error:", { message, status, details, raw: err });
+
+      // try to extract field-level validation errors (if any)
+      let fieldErrors: { [k: string]: string } | null = null;
+      try {
+        const ae = err as AxiosError & { response?: any };
+        fieldErrors = extractFieldErrors(ae?.response?.data ?? null);
+      } catch (_) {
+        fieldErrors = null;
+      }
+      if (fieldErrors) {
+        setErrors((prev) => ({ ...prev, ...fieldErrors }));
+        toast.error("Validation error — check the form fields");
+      } else {
+        const short = message ?? "Failed to save";
+        toast.error(short);
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Accessible label text for the top info banner (like screenshot)
-  const infoBannerText = "Real-Time Inventory implemented on";
+  const confirmDelete = (it: Vendor) => setDeleteTarget(it);
 
-  // For responsive mobile layout: stack fields vertically on small screens
+  const doDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      await api.delete(`/admin/settings/vendors/delete/${deleteTarget.id}`);
+      setVendors((prev) =>
+        prev.filter((v) => String(v.id) !== String(deleteTarget.id))
+      );
+      toast.success("Vendor deleted");
+    } catch (err: unknown) {
+      const { message, details, status } = formatAxiosError(err);
+      console.error("Delete vendor error:", { message, status, details, raw: err });
+      toast.error(message ?? "Failed to delete");
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
+    }
+  };
+
   return (
-    <div className="p-4 lg:p-6">
-      {/* Top header row with page title and Export button */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-        <h2 className="text-2xl font-semibold text-slate-800">SKU-movement</h2>
-        <div className="flex items-center gap-3">
+    <div className="p-6 max-w-6xl mx-auto">
+      <Toaster position="top-right" />
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h2 className="text-2xl font-semibold text-slate-800">Vendor Management</h2>
+        <div className="flex items-center gap-2">
           <button
-            onClick={exportCsv}
-            className="inline-flex items-center px-4 py-2 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-medium shadow"
-            aria-label="Export CSV"
+            onClick={openAdd}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md shadow hover:bg-indigo-700 transition"
           >
-            Export
+            <Plus className="w-4 h-4" />
+            Add Vendor
+          </button>
+          <button
+            onClick={() => void fetchVendors()}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border bg-white hover:bg-slate-50 transition"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Refresh
           </button>
         </div>
       </div>
 
-      {/* Info banner */}
-      <div className="rounded-md bg-indigo-200 border border-indigo-300 p-4 mb-4">
-        <div className="font-medium text-indigo-900">{infoBannerText}</div>
-      </div>
-
-      {/* Form Card */}
-      <div className="bg-white rounded-lg shadow p-4 mb-6">
-        <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-          {/* Select Item */}
-          <div className="md:col-span-4">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Select Item</label>
-            <div>
-              <select
-                value={selectedSku}
-                onChange={(e) => setSelectedSku(e.target.value)}
-                className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                aria-invalid={!!errors.selectedSku}
-                aria-describedby={errors.selectedSku ? "selectedSku-error" : undefined}
-              >
-                <option value="">Select item</option>
-                {SAMPLE_SKUS.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-              {errors.selectedSku && (
-                <p id="selectedSku-error" className="mt-1 text-sm text-red-600">
-                  {errors.selectedSku}
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Start Date */}
-          <div className="md:col-span-3">
-            <label className="block text-sm font-medium text-slate-700 mb-2">Start Date</label>
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              aria-invalid={!!errors.startDate || !!errors.dateRange}
-            />
-            {(errors.startDate || errors.dateRange) && (
-              <p className="mt-1 text-sm text-red-600">{errors.startDate || errors.dateRange}</p>
-            )}
-          </div>
-
-          {/* End Date */}
-          <div className="md:col-span-3">
-            <label className="block text-sm font-medium text-slate-700 mb-2">End Date</label>
-            <input
-              type="date"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              aria-invalid={!!errors.endDate || !!errors.dateRange}
-            />
-            {(errors.endDate || errors.dateRange) && (
-              <p className="mt-1 text-sm text-red-600">{errors.endDate || errors.dateRange}</p>
-            )}
-          </div>
-
-          {/* Submit */}
-          <div className="md:col-span-2 flex md:justify-end">
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className={`w-full md:w-auto px-6 py-2 rounded-md text-white font-medium shadow ${
-                isSubmitting ? "bg-indigo-300 cursor-not-allowed" : "bg-indigo-600 hover:bg-indigo-700"
-              }`}
-            >
-              {isSubmitting ? "Submitting..." : "Submit"}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* Table Card */}
-      <div className="bg-white rounded-lg shadow p-4">
-        <div className="overflow-x-auto">
-          <table className="min-w-full border-collapse">
-            <thead>
+      {/* Table (desktop) */}
+      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div className="hidden md:block">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-slate-50">
               <tr>
-                {/* header style matches screenshot: dark blue background + white text */}
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">#</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Date</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Opening Stock</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Punched Qty</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Sales Return</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Order Canceled</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Purchase</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Purchase Return</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Goods Out</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Goods In</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Split Out</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Split In</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">SLOC Shrinkage</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Physical Stock</th>
-                <th className="sticky top-0 bg-[#07156a] text-white text-left px-3 py-3 whitespace-nowrap">Closing Bal</th>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Email</th>
+                <th className="px-4 py-3">Phone</th>
+                <th className="px-4 py-3">Address</th>
+                <th className="px-4 py-3 w-40">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {rows.length === 0 ? (
+              {loading ? (
                 <tr>
-                  <td colSpan={15} className="py-16 text-center text-slate-400">
-                    No movements to show. Select an item and date range then click Submit.
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                    Loading…
+                  </td>
+                </tr>
+              ) : vendors.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
+                    No vendors found.
                   </td>
                 </tr>
               ) : (
-                rows.map((r, i) => (
-                  <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                    <td className="px-3 py-2 text-sm">{i + 1}</td>
-                    <td className="px-3 py-2 text-sm">{r.date}</td>
-                    <td className="px-3 py-2 text-sm">{r.openingStock}</td>
-                    <td className="px-3 py-2 text-sm">{r.punchedQty}</td>
-                    <td className="px-3 py-2 text-sm">{r.salesReturn}</td>
-                    <td className="px-3 py-2 text-sm">{r.orderCanceled}</td>
-                    <td className="px-3 py-2 text-sm">{r.purchase}</td>
-                    <td className="px-3 py-2 text-sm">{r.purchaseReturn}</td>
-                    <td className="px-3 py-2 text-sm">{r.goodsOut}</td>
-                    <td className="px-3 py-2 text-sm">{r.goodsIn}</td>
-                    <td className="px-3 py-2 text-sm">{r.splitOut}</td>
-                    <td className="px-3 py-2 text-sm">{r.splitIn}</td>
-                    <td className="px-3 py-2 text-sm">{r.slocShrinkage}</td>
-                    <td className="px-3 py-2 text-sm">{r.physicalStock}</td>
-                    <td className="px-3 py-2 text-sm">{r.closingBal}</td>
+                vendors.map((it) => (
+                  <tr key={String(it.id)} className="border-t hover:bg-slate-50 transition">
+                    <td className="px-4 py-3">{it.name}</td>
+                    <td className="px-4 py-3">{it.email}</td>
+                    <td className="px-4 py-3">{it.phone}</td>
+                    <td className="px-4 py-3">{it.address}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openEdit(it)}
+                          className="px-3 py-1 rounded border inline-flex items-center gap-2 hover:bg-slate-100 transition"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => confirmDelete(it)}
+                          className="px-3 py-1 rounded bg-red-600 text-white inline-flex items-center gap-2 hover:bg-red-700 transition"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
         </div>
+
+        {/* Cards (mobile) */}
+        <div className="md:hidden p-4 grid gap-3">
+          {loading ? (
+            <div className="text-center text-slate-500">Loading…</div>
+          ) : vendors.length === 0 ? (
+            <div className="text-center text-slate-500">No vendors found.</div>
+          ) : (
+            vendors.map((it) => (
+              <div
+                key={String(it.id)}
+                className="border rounded-lg p-3 flex flex-col gap-2 hover:bg-slate-50 transition"
+              >
+                <div className="font-medium">{it.name}</div>
+                <div className="text-sm text-slate-600">{it.email}</div>
+                <div className="text-sm text-slate-600">{it.phone}</div>
+                <div className="text-sm text-slate-600">{it.address}</div>
+                <div className="flex gap-2 mt-2">
+                  <button onClick={() => openEdit(it)} className="flex-1 p-2 border rounded hover:bg-slate-100">
+                    <Edit3 className="w-4 h-4 inline" /> Edit
+                  </button>
+                  <button
+                    onClick={() => confirmDelete(it)}
+                    className="flex-1 p-2 rounded bg-red-600 text-white hover:bg-red-700"
+                  >
+                    <Trash2 className="w-4 h-4 inline" /> Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
-      {/* inline export error message */}
-      {errors.export && (
-        <div className="mt-3 rounded-md bg-red-50 border border-red-200 p-3 text-red-700">{errors.export}</div>
+      {/* Modal Add/Edit */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-md rounded-lg shadow-lg z-10">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-medium">{editing ? "Edit Vendor" : "Add Vendor"}</h3>
+              <button onClick={() => setModalOpen(false)} className="p-2 rounded hover:bg-slate-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={handleSave} className="p-4 space-y-4">
+              {["name", "email", "phone", "address"].map((field) => (
+                <div key={field}>
+                  <label className="block text-sm font-medium mb-1 capitalize">{field}</label>
+                  <input
+                    value={(form as any)[field]}
+                    onChange={(e) => setForm((s) => ({ ...s, [field]: e.target.value }))}
+                    className="w-full border rounded px-3 py-2 focus:ring focus:ring-indigo-200"
+                    placeholder={`Enter ${field}`}
+                  />
+                  {errors[field] && <div className="text-xs text-red-500 mt-1">{errors[field]}</div>}
+                </div>
+              ))}
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalOpen(false);
+                    setEditing(null);
+                  }}
+                  className="px-4 py-2 rounded border hover:bg-slate-100"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  {saving ? "Saving…" : editing ? "Update" : "Add"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteTarget(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-lg shadow-lg z-10 p-5">
+            <h3 className="text-lg font-medium">Confirm delete</h3>
+            <p className="text-sm text-slate-600 mt-2">
+              Are you sure you want to delete <strong>{deleteTarget.name}</strong>?
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteLoading}
+                className="px-3 py-1 rounded border hover:bg-slate-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => void doDelete()}
+                disabled={deleteLoading}
+                className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+              >
+                {deleteLoading ? "Deleting…" : "Yes, delete"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
-}
+};
+export default SkuMovement;

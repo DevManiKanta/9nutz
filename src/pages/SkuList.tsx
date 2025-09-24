@@ -1,389 +1,333 @@
-import React, { useMemo, useState } from "react";
-import { Search, DownloadCloud, Edit2, X } from "lucide-react";
+// src/pages/SkuList.tsx
+import React, { useEffect, useState } from "react";
+import { Plus, Edit3, Trash2, X } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
+import api from "@/api/axios";
 
-/**
- * SkuList.tsx
- *
- * - Search input and Export button are on the same line (responsive: stack on small screens).
- * - Search triggers on Enter or Search button click.
- * - Export uses the current filtered rows.
- * - Modal edit preserves previous behavior.
- *
- * Requires: Tailwind CSS + lucide-react
- */
-
-type SkuRow = {
-  id: string;
-  slNo: number;
-  hsn: string;
+type GstItem = {
+  id: string | number;
   name: string;
-  stockQty: number;
-  localName?: string;
-  category?: string;
-  subCategory?: string;
-  brand?: string;
-  amountType?: string;
+  percentage: number;
 };
 
-const SAMPLE_ROWS: SkuRow[] = [
-  {
-    id: "sku-1",
-    slNo: 1,
-    hsn: "15089091",
-    name: "Niranthara Premium Lamp Oil 200ml",
-    stockQty: 25.76,
-    localName: "నిరంతర ప్రీమియం లంప్ ఆయిల్ 200 మి.లీ",
-    category: "Oil And Ghee",
-    subCategory: "Deepam",
-    brand: "VSPL",
-    amountType: "net",
-  },
-  {
-    id: "sku-2",
-    slNo: 2,
-    hsn: "15089091",
-    name: "Niranthara Premium Lamp Oil 900ml",
-    stockQty: 0,
-    localName: "నిరంతర ప్రీమియం లంప్ ఆయిల్ 900 మి.లీ",
-    category: "Oil And Ghee",
-    subCategory: "Deepam",
-    brand: "VSPL",
-    amountType: "net",
-  },
-  {
-    id: "sku-3",
-    slNo: 3,
-    hsn: "15089091",
-    name: "Niranthara Premium Lamp Oil 450ml",
-    stockQty: 38.4666,
-    localName: "నిరంతర ప్రీమియం లంప్ ఆయిల్ 450 మి.లీ",
-    category: "Oil And Ghee",
-    subCategory: "Deepam",
-    brand: "VSPL",
-    amountType: "net",
-  },
-];
+const SkuList: React.FC = () => {
+  const [items, setItems] = useState<GstItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editing, setEditing] = useState<GstItem | null>(null);
+  const [form, setForm] = useState({ name: "", percentage: "" });
+  const [errors, setErrors] = useState<{ name?: string; percentage?: string }>({});
+  const [deleteTarget, setDeleteTarget] = useState<GstItem | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
-export default function SkuList(): JSX.Element {
-  const [rows] = useState<SkuRow[]>(SAMPLE_ROWS);
-  const [query, setQuery] = useState("");
-  const [filteredRows, setFilteredRows] = useState<SkuRow[]>(rows);
-  const [isExporting, setIsExporting] = useState(false);
+  useEffect(() => {
+    void fetchItems();
+  }, []);
 
-  // modal state for edit
-  const [editing, setEditing] = useState<SkuRow | null>(null);
-  const [editName, setEditName] = useState("");
-  const [editStock, setEditStock] = useState<string>("");
-  const [editErrors, setEditErrors] = useState<{ name?: string; stock?: string }>({});
+  const normalizeRows = (rows: any[]): GstItem[] =>
+    rows.map((r, i) => ({
+      id: r.id ?? r._id ?? r.gst_id ?? r.gstId ?? `srv-${i}`,
+      name: r.name ?? "",
+      percentage: Number(r.percentage ?? r.percentage_percent ?? r.per ?? 0),
+    }));
 
-  // filtering logic
-  const onSearch = (e?: React.FormEvent) => {
+  const fetchItems = async () => {
+    setLoading(true);
+    try {
+      const res = await api.get("/admin/settings/gst/show");
+      const body = res.data;
+      let rows: any[] = [];
+      if (Array.isArray(body)) rows = body;
+      else if (Array.isArray(body.data)) rows = body.data;
+      else if (Array.isArray(body.rows)) rows = body.rows;
+      else if (Array.isArray(body.gsts)) rows = body.gsts;
+      else if (body && typeof body === "object" && Array.isArray(Object.values(body))) {
+        // fallback but keep safe
+        rows = body.data ?? [];
+      }
+      const normalized = normalizeRows(rows);
+      setItems(normalized);
+    } catch (err: any) {
+      console.error("Failed to load GSTs", err);
+      toast.error("Failed to load GST list");
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const openAdd = () => {
+    setEditing(null);
+    setForm({ name: "", percentage: "" });
+    setErrors({});
+    setModalOpen(true);
+  };
+
+  const openEdit = (it: GstItem) => {
+    setEditing(it);
+    setForm({ name: it.name, percentage: String(it.percentage) });
+    setErrors({});
+    setModalOpen(true);
+  };
+
+  const validate = () => {
+    const e: typeof errors = {};
+    if (!form.name.trim()) e.name = "Name is required";
+    if (form.percentage === "" || form.percentage === null) e.percentage = "Percentage is required";
+    else if (isNaN(Number(form.percentage))) e.percentage = "Must be a number";
+    else if (Number(form.percentage) < 0) e.percentage = "Must be >= 0";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const handleSave = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    const q = query.trim().toLowerCase();
-    if (!q) {
-      setFilteredRows(rows);
+    if (!validate()) {
+      toast.error("Fix validation errors");
       return;
     }
-    setFilteredRows(
-      rows.filter(
-        (r) =>
-          String(r.slNo).includes(q) ||
-          r.hsn.toLowerCase().includes(q) ||
-          r.name.toLowerCase().includes(q) ||
-          (r.localName || "").toLowerCase().includes(q) ||
-          (r.category || "").toLowerCase().includes(q)
-      )
-    );
+    setSaving(true);
+    try {
+      const payload = { name: form.name.trim(), percentage: Number(form.percentage) };
+      if (editing) {
+        const res = await api.post(`/admin/settings/gst/update/${editing.id}`, payload);
+        const body = res.data;
+        const updatedRaw = body?.data ?? body?.gst ?? body ?? null;
+        const updated: GstItem = {
+          id: updatedRaw?.id ?? editing.id,
+          name: updatedRaw?.name ?? payload.name,
+          percentage: Number(updatedRaw?.percentage ?? payload.percentage),
+        };
+        setItems((prev) => prev.map((p) => (String(p.id) === String(editing.id) ? updated : p)));
+        toast.success("GST updated");
+      } else {
+        const res = await api.post("/admin/settings/gst/add", payload);
+        const body = res.data;
+        const createdRaw = body?.data ?? body?.gst ?? body ?? null;
+        const created: GstItem = {
+          id: createdRaw?.id ?? createdRaw?._id ?? `tmp-${Date.now()}`,
+          name: createdRaw?.name ?? payload.name,
+          percentage: Number(createdRaw?.percentage ?? payload.percentage),
+        };
+        setItems((prev) => [created, ...prev]);
+        toast.success("GST added");
+      }
+      setModalOpen(false);
+      setEditing(null);
+      setForm({ name: "", percentage: "" });
+    } catch (err: any) {
+      console.error("Save GST error", err);
+      const msg = err?.response?.data?.message ?? err?.message ?? "Failed to save";
+      toast.error(String(msg));
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Export visible rows as CSV
-  const exportCsv = () => {
-    const exportRows = filteredRows.length ? filteredRows : rows;
-    if (exportRows.length === 0) return;
-    setIsExporting(true);
-    const headers = [
-      "Sl No",
-      "HSN code",
-      "Name",
-      "Stock Qty",
-      "Local name",
-      "Category",
-      "Sub Category",
-      "Brand",
-      "Amount Type",
-    ];
-    const lines = exportRows.map((r) =>
-      [
-        r.slNo,
-        r.hsn,
-        `"${String(r.name).replace(/"/g, '""')}"`,
-        r.stockQty,
-        `"${String(r.localName ?? "").replace(/"/g, '""')}"`,
-        r.category ?? "",
-        r.subCategory ?? "",
-        r.brand ?? "",
-        r.amountType ?? "",
-      ].join(",")
-    );
-    const csv = [headers.join(","), ...lines].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `sku_list_${new Date().toISOString().slice(0, 10)}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-    setTimeout(() => setIsExporting(false), 400);
+  const confirmDelete = (it: GstItem) => {
+    setDeleteTarget(it);
   };
 
-  // Open edit modal
-  const openEdit = (r: SkuRow) => {
-    setEditing(r);
-    setEditName(r.name);
-    setEditStock(String(r.stockQty));
-    setEditErrors({});
-    document.body.style.overflow = "hidden";
-  };
-
-  const closeEdit = () => {
-    setEditing(null);
-    setEditErrors({});
-    document.body.style.overflow = "";
-  };
-
-  const saveEdit = () => {
-    const errs: { name?: string; stock?: string } = {};
-    if (!editName.trim()) errs.name = "Item name is required";
-    if (editStock.trim() === "") errs.stock = "Stock is required";
-    else if (isNaN(Number(editStock)) || Number(editStock) < 0) errs.stock = "Enter a valid non-negative number";
-
-    setEditErrors(errs);
-    if (Object.keys(errs).length) return;
-
-    // Replace with actual save to backend. For now just close modal.
-    closeEdit();
-  };
-
-  // displayed rows: if user has searched, use filteredRows; else show all
-  const displayed = filteredRows.length ? filteredRows : rows;
-
-  // stock pill
-  const StockPill: React.FC<{ value: number }> = ({ value }) => {
-    const formatted = Number.isFinite(value) ? value.toFixed(4).replace(/\.?0+$/, (m) => m) : "0";
-    return (
-      <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-indigo-600 text-white text-sm font-medium shadow">
-        {formatted}
-      </span>
-    );
-  };
-
-  // Enter triggers search
-  const onKeySearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") onSearch();
+  const doDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      await api.delete(`/admin/settings/gst/delete/${deleteTarget.id}`);
+      setItems((prev) => prev.filter((p) => String(p.id) !== String(deleteTarget.id)));
+      toast.success("GST deleted");
+    } catch (err: any) {
+      console.error("Delete error", err);
+      const msg = err?.response?.data?.message ?? err?.message ?? "Failed to delete";
+      toast.error(String(msg));
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
+    }
   };
 
   return (
     <div className="p-6">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-800">SKU List</h1>
-          <div className="text-sm text-slate-500 mt-1">
-            <a href="/" className="text-indigo-500 hover:underline">
-              Home
-            </a>{" "}
-            <span className="mx-2"> - </span> SKU List
-          </div>
-        </div>
-
-        {/* SEARCH + EXPORT - same line, responsive */}
-        <div className="w-full md:w-auto">
-          <form onSubmit={onSearch} className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3">
-            {/* search input group */}
-            <div className="flex items-center w-full sm:w-[520px]">
-              <label htmlFor="sku-search" className="sr-only">
-                Search SKUs
-              </label>
-              <div className="relative flex-1">
-                <input
-                  id="sku-search"
-                  type="text"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  onKeyDown={onKeySearch}
-                  placeholder="Search..."
-                  aria-label="Search SKUs"
-                  className="w-full h-10 rounded-l-md border border-gray-300 px-3 pl-10 focus:ring-2 focus:ring-indigo-300 outline-none"
-                />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 h-5 w-5" />
-              </div>
-
-              {/* search button */}
-              <button
-                type="submit"
-                className="h-10 w-10 ml-2 rounded-r-md bg-indigo-600 hover:bg-indigo-700 flex items-center justify-center text-white"
-                aria-label="Search"
-                title="Search"
-              >
-                <Search className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Export */}
-            <div className="flex-shrink-0">
-              <button
-                type="button"
-                onClick={exportCsv}
-                disabled={isExporting || displayed.length === 0}
-                className={`flex items-center gap-2 px-4 py-2 border rounded-md text-indigo-700 bg-white hover:bg-indigo-50 transition ${
-                  isExporting || displayed.length === 0 ? "opacity-50 cursor-not-allowed" : ""
-                }`}
-                aria-label="Export CSV"
-                title={displayed.length === 0 ? "No data to export" : "Export CSV"}
-              >
-                <DownloadCloud className="w-4 h-4" />
-                <span className="hidden sm:inline-block">Export</span>
-              </button>
-            </div>
-          </form>
+      <Toaster position="top-right" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h2 className="text-2xl font-semibold">GST Management</h2>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openAdd}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md shadow hover:bg-emerald-700"
+          >
+            <Plus className="w-4 h-4" />
+            Add GST
+          </button>
+          <button
+            onClick={() => void fetchItems()}
+            className="px-3 py-2 rounded-md border bg-white hover:bg-slate-50"
+          >
+            Refresh
+          </button>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-lg shadow p-4 overflow-x-auto">
-        <table className="min-w-full border-collapse">
-          <thead>
-            <tr>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left sticky top-0">Sl No</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">HSN code</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">Name</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">Stock Qty</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">Local name</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">Category</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">Sub Category</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">Brand</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">Amount Type</th>
-              <th className="px-3 py-4 bg-[#07156a] text-white text-left">Action</th>
-            </tr>
-          </thead>
-
-          <tbody>
-            {displayed.length === 0 ? (
+      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div className="hidden md:block">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-slate-50">
               <tr>
-                <td colSpan={10} className="p-12 text-center text-slate-400">
-                  No SKUs available.
-                </td>
+                <th className="px-4 py-3">Name</th>
+                <th className="px-4 py-3">Percentage (%)</th>
+                <th className="px-4 py-3 w-40">Actions</th>
               </tr>
-            ) : (
-              displayed.map((r, idx) => (
-                <tr key={r.id} className={idx % 2 === 0 ? "bg-white" : "bg-slate-50"}>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700 whitespace-nowrap">{r.slNo}</td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700 whitespace-nowrap">{r.hsn}</td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700 max-w-xs">
-                    <div className="line-clamp-2">{r.name}</div>
-                  </td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700 whitespace-nowrap">
-                    <StockPill value={r.stockQty} />
-                  </td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700">{r.localName}</td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700">{r.category}</td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700">{r.subCategory}</td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700">{r.brand}</td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700">{r.amountType}</td>
-                  <td className="px-3 py-4 align-top text-sm text-slate-700">
-                    <button
-                      onClick={() => openEdit(r)}
-                      className="inline-flex items-center justify-center h-10 w-10 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white shadow"
-                      title="Edit SKU"
-                      aria-label={`Edit ${r.name}`}
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={3} className="px-4 py-6 text-center text-slate-500">
+                    Loading…
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={3} className="px-4 py-6 text-center text-slate-500">
+                    No GST entries found.
+                  </td>
+                </tr>
+              ) : (
+                items.map((it) => (
+                  <tr key={String(it.id)} className="border-t hover:bg-slate-50">
+                    <td className="px-4 py-3">{it.name}</td>
+                    <td className="px-4 py-3">{it.percentage}%</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openEdit(it)}
+                          className="px-3 py-1 rounded border inline-flex items-center gap-2"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => confirmDelete(it)}
+                          className="px-3 py-1 rounded bg-red-600 text-white inline-flex items-center gap-2"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="md:hidden p-4 grid gap-3">
+          {loading ? (
+            <div className="text-center text-slate-500">Loading…</div>
+          ) : items.length === 0 ? (
+            <div className="text-center text-slate-500">No GST entries found.</div>
+          ) : (
+            items.map((it) => (
+              <div key={String(it.id)} className="border rounded-lg p-3 flex items-center justify-between">
+                <div>
+                  <div className="font-medium">{it.name}</div>
+                  <div className="text-sm text-slate-500">{it.percentage}%</div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => openEdit(it)} className="p-2 border rounded">
+                    <Edit3 className="w-4 h-4" />
+                  </button>
+                  <button onClick={() => confirmDelete(it)} className="p-2 rounded bg-red-600 text-white">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
 
-      {/* Edit modal */}
-      {editing && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6"
-        >
-          <div className="fixed inset-0 bg-black/40" onClick={closeEdit} />
-
-          <div className="relative w-full max-w-2xl bg-white rounded-lg shadow-lg z-10 overflow-hidden">
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-md rounded-lg shadow-lg z-10">
             <div className="flex items-center justify-between p-4 border-b">
-              <h3 className="text-lg font-semibold">Edit SKU</h3>
-              <button onClick={closeEdit} className="p-2 rounded hover:bg-slate-100" aria-label="Close edit modal">
-                <X className="w-5 h-5" />
+              <h3 className="text-lg font-medium">{editing ? "Edit GST" : "Add GST"}</h3>
+              <button onClick={() => setModalOpen(false)} className="p-2 rounded hover:bg-slate-100">
+                <X className="w-4 h-4" />
               </button>
             </div>
-
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Item Name</label>
-                  <input
-                    type="text"
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className={`w-full h-10 px-3 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-300 ${
-                      editErrors.name ? "border-red-300" : "border-slate-200"
-                    }`}
-                    aria-invalid={!!editErrors.name}
-                  />
-                  {editErrors.name && <p className="text-sm text-red-600 mt-1">{editErrors.name}</p>}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Stock Qty</label>
-                  <input
-                    type="number"
-                    step="0.0001"
-                    value={editStock}
-                    onChange={(e) => setEditStock(e.target.value)}
-                    className={`w-full h-10 px-3 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-300 ${
-                      editErrors.stock ? "border-red-300" : "border-slate-200"
-                    }`}
-                    aria-invalid={!!editErrors.stock}
-                  />
-                  {editErrors.stock && <p className="text-sm text-red-600 mt-1">{editErrors.stock}</p>}
-                </div>
+            <form onSubmit={handleSave} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <input
+                  value={form.name}
+                  onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                  className="w-full border rounded px-3 py-2"
+                  placeholder="e.g. GST Standard"
+                />
+                {errors.name && <div className="text-xs text-red-500 mt-1">{errors.name}</div>}
               </div>
 
-              <div className="mt-6 flex justify-end gap-3">
-                <button onClick={closeEdit} className="px-4 py-2 rounded border text-slate-700 hover:bg-slate-50">
+              <div>
+                <label className="block text-sm font-medium mb-1">Percentage</label>
+                <input
+                  value={form.percentage}
+                  onChange={(e) => setForm((s) => ({ ...s, percentage: e.target.value }))}
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  className="w-full border rounded px-3 py-2"
+                  placeholder="e.g. 18"
+                />
+                {errors.percentage && <div className="text-xs text-red-500 mt-1">{errors.percentage}</div>}
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModalOpen(false);
+                    setEditing(null);
+                  }}
+                  className="px-4 py-2 rounded border"
+                >
                   Cancel
                 </button>
-                <button
-                  onClick={saveEdit}
-                  className="px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
-                  disabled={!!editErrors.name || !!editErrors.stock}
-                >
-                  Save
+                <button type="submit" disabled={saving} className="px-4 py-2 rounded bg-emerald-600 text-white">
+                  {saving ? "Saving…" : editing ? "Update" : "Add"}
                 </button>
               </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteTarget(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-lg shadow-lg z-10 p-5">
+            <h3 className="text-lg font-medium">Confirm delete</h3>
+            <p className="text-sm text-slate-600 mt-2">
+              Are you sure you want to delete <strong>{deleteTarget.name}</strong>?
+            </p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} disabled={deleteLoading} className="px-3 py-1 rounded border">
+                Cancel
+              </button>
+              <button
+                onClick={() => void doDelete()}
+                disabled={deleteLoading}
+                className="px-3 py-1 rounded bg-red-600 text-white"
+              >
+                {deleteLoading ? "Deleting…" : "Yes, delete"}
+              </button>
             </div>
           </div>
         </div>
       )}
     </div>
   );
-}
-
-// Stock pill component (kept below so it can access local scope)
-const StockPill: React.FC<{ value: number }> = ({ value }) => {
-  const formatted = Number.isFinite(value) ? value.toFixed(4).replace(/\.?0+$/, (m) => m) : "0";
-  return (
-    <span className="inline-flex items-center justify-center px-3 py-1 rounded-full bg-indigo-600 text-white text-sm font-medium shadow">
-      {formatted}
-    </span>
-  );
 };
+
+export default SkuList;

@@ -1,186 +1,1107 @@
-import React, { useMemo, useState } from "react";
+// "use client";
 
-type Category = { id: string; label: string };
+// import React, { useEffect, useState } from "react";
+// import { Plus, Edit3, Trash2, X, RefreshCw } from "lucide-react";
+// import toast, { Toaster } from "react-hot-toast";
+// import api from "@/api/axios";
+// import type { AxiosError } from "axios";
 
-const SAMPLE_CATEGORIES: Category[] = [
-  { id: "cat-1", label: "Beverages" },
-  { id: "cat-2", label: "Snacks" },
-  { id: "cat-3", label: "Dairy" },
-];
+// /**
+//  * Inventory record shape (adjust types if your backend differs)
+//  */
+// type Inventory = {
+//   id: string | number;
+//   product_id: string | number;
+//   quantity: number;
+//   type: "in" | "out" | string;
+//   vendor_id?: string | number | null;
+//   note?: string | null;
+//   created_at?: string | null;
+//   updated_at?: string | null;
+// };
 
-const formatAria = (name: string, required?: boolean) =>
-  `${name}${required ? " (required)" : ""}`;
+// /**
+//  * Form shape
+//  */
+// type FormState = {
+//   product_id: string;
+//   quantity: string; // keep as string for input and convert when sending
+//   type: string;
+//   vendor_id: string;
+//   note: string;
+// };
 
-const Sku: React.FC = () => {
-  const [category, setCategory] = useState<string>("");
-  const [itemName, setItemName] = useState<string>("");
-  const [touched, setTouched] = useState<{ category?: boolean; itemName?: boolean }>({});
-  const [isSearching, setIsSearching] = useState<boolean>(false);
-  const [resultsPresent, setResultsPresent] = useState<boolean>(false);
+// const defaultForm: FormState = { product_id: "", quantity: "0", type: "in", vendor_id: "", note: "" };
 
-  const errors = useMemo(() => {
-    const e: { category?: string; itemName?: string } = {};
-    if (!category) e.category = "Category is required";
-    if (itemName && itemName.trim().length > 0 && itemName.trim().length < 2)
-      e.itemName = "Item name must be at least 2 characters";
-    return e;
-  }, [category, itemName]);
+// /* ----------------------
+//    Error helpers (robust)
+//    ---------------------- */
+// function formatAxiosError(err: unknown) {
+//   const fallback = { message: "An unknown error occurred", details: null as any, status: undefined as number | undefined };
+//   try {
+//     if (!err) return fallback;
+//     const ae = err as AxiosError & { response?: any; request?: any };
+//     if (ae && (ae.isAxiosError || ae.response || ae.request)) {
+//       const status = ae.response?.status;
+//       const data = ae.response?.data;
+//       let message = ae.message || "Request failed";
+//       if (data) {
+//         if (typeof data === "string") message = data;
+//         else if (data.message) message = data.message;
+//         else if (data.error) message = data.error;
+//         else if (data.errors && typeof data.errors === "string") message = data.errors;
+//       }
+//       return { message: String(message), details: data ?? ae.response ?? ae.request ?? ae.stack, status };
+//     }
+//     if (err instanceof Error) return { message: err.message, details: err.stack, status: undefined };
+//     if (typeof err === "string") return { message: err, details: null, status: undefined };
+//     return { message: "Unknown error", details: JSON.stringify(err), status: undefined };
+//   } catch (e) {
+//     return { message: "Error while parsing error", details: e, status: undefined };
+//   }
+// }
 
-  const isValid = useMemo(() => Object.keys(errors).length === 0, [errors]);
+// /**
+//  * Try to extract field-level validation errors from the server response.
+//  * Supports common shapes: { errors: { field: [msg] } } or { validation: {...} } or direct field keys.
+//  */
+// function extractFieldErrors(responseData: any): Record<string, string> | null {
+//   if (!responseData) return null;
+//   if (responseData.errors && typeof responseData.errors === "object") {
+//     const out: Record<string, string> = {};
+//     for (const k of Object.keys(responseData.errors)) {
+//       const v = responseData.errors[k];
+//       out[k] = Array.isArray(v) ? String(v[0]) : String(v);
+//     }
+//     return out;
+//   }
+//   if (responseData.validation && typeof responseData.validation === "object") {
+//     const out: Record<string, string> = {};
+//     for (const k of Object.keys(responseData.validation)) {
+//       const v = responseData.validation[k];
+//       out[k] = Array.isArray(v) ? String(v[0]) : String(v);
+//     }
+//     return out;
+//   }
+//   const possible = ["product_id", "quantity", "type", "vendor_id", "note"];
+//   const out: Record<string, string> = {};
+//   let found = false;
+//   for (const f of possible) {
+//     if (responseData[f]) {
+//       out[f] = String(responseData[f]);
+//       found = true;
+//     }
+//   }
+//   return found ? out : null;
+// }
 
-  const handleSubmit = async (ev?: React.FormEvent) => {
-    ev?.preventDefault();
-    setTouched({ category: true, itemName: true });
+// /* -------------------------
+//    Inventory component
+//    ------------------------- */
+// const InventoryManager: React.FC = () => {
+//   const [items, setItems] = useState<Inventory[]>([]);
+//   const [loading, setLoading] = useState(false);
+//   const [refreshing, setRefreshing] = useState(false);
 
-    if (!isValid) return;
+//   const [modalOpen, setModalOpen] = useState(false);
+//   const [editing, setEditing] = useState<Inventory | null>(null);
+//   const [form, setForm] = useState<FormState>(defaultForm);
+//   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+//   const [saving, setSaving] = useState(false);
 
-    setIsSearching(true);
-    setResultsPresent(false);
+//   const [deleteTarget, setDeleteTarget] = useState<Inventory | null>(null);
+//   const [deleteLoading, setDeleteLoading] = useState(false);
 
-    // Replace this simulated request with your API call.
-    try {
-      await new Promise((res) => setTimeout(res, 600));
-      // For demo keep results empty (as screenshot). To show results set to true.
-      setResultsPresent(false);
-    } catch {
-      // handle error with toaster or Sonner in your app
-    } finally {
-      setIsSearching(false);
+//   // load list
+//   useEffect(() => {
+//     void fetchItems();
+//   }, []);
+
+//   async function fetchItems() {
+//     setLoading(true);
+//     try {
+//       const res = await api.get("/admin/settings/stock-inventory/show");
+//       const body = res.data;
+//       // server may return array or { data:[...] }
+//       const rows: any[] = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : body?.inventory ?? body?.items ?? [];
+//       setItems(rows.map((r: any) => normalizeInventory(r)));
+//     } catch (err: unknown) {
+//       const { message, status } = formatAxiosError(err);
+//       console.error("Failed to load inventory:", err);
+//       if (status === 401) toast.error("Unauthorized — please login.");
+//       else toast.error(message || "Failed to load inventory");
+//       setItems([]);
+//     } finally {
+//       setLoading(false);
+//     }
+//   }
+
+//   function normalizeInventory(raw: any): Inventory {
+//     return {
+//       id: raw.id ?? raw._id ?? raw.inventory_id ?? raw.inventoryId ?? String(Date.now()) + Math.random(),
+//       product_id: raw.product_id ?? raw.productId ?? raw.product ?? "",
+//       quantity: Number(raw.quantity ?? raw.qty ?? 0),
+//       type: raw.type ?? "in",
+//       vendor_id: raw.vendor_id ?? raw.vendorId ?? raw.vendor ?? null,
+//       note: raw.note ?? raw.notes ?? null,
+//       created_at: raw.created_at ?? raw.createdAt ?? null,
+//       updated_at: raw.updated_at ?? raw.updatedAt ?? null,
+//     };
+//   }
+
+//   // open add modal
+//   function openAdd() {
+//     setEditing(null);
+//     setForm(defaultForm);
+//     setFormErrors({});
+//     setModalOpen(true);
+//   }
+//   // open edit
+//   function openEdit(it: Inventory) {
+//     setEditing(it);
+//     setForm({
+//       product_id: String(it.product_id ?? ""),
+//       quantity: String(it.quantity ?? 0),
+//       type: String(it.type ?? "in"),
+//       vendor_id: String(it.vendor_id ?? ""),
+//       note: String(it.note ?? ""),
+//     });
+//     setFormErrors({});
+//     setModalOpen(true);
+//   }
+
+//   // validation
+//   function validateForm(): boolean {
+//     const e: Record<string, string> = {};
+//     if (!form.product_id.trim()) e.product_id = "Product is required";
+//     if (form.quantity === "" || Number.isNaN(Number(form.quantity))) e.quantity = "Quantity is required and must be a number";
+//     else if (Number(form.quantity) <= 0) e.quantity = "Quantity must be > 0";
+//     if (!form.type.trim()) e.type = "Type is required";
+//     setFormErrors(e);
+//     return Object.keys(e).length === 0;
+//   }
+
+//   // create or update
+//   async function saveItem(e?: React.FormEvent) {
+//     e?.preventDefault();
+//     if (!validateForm()) {
+//       toast.error("Fix validation errors");
+//       return;
+//     }
+//     setSaving(true);
+//     try {
+//       const payload = {
+//         product_id: form.product_id,
+//         quantity: Number(form.quantity),
+//         type: form.type,
+//         vendor_id: form.vendor_id || null,
+//         note: form.note || null,
+//       };
+
+//       if (editing) {
+//         // optimistic update
+//         const prev = items;
+//         const updatedCandidate: Inventory = { ...editing, ...payload, quantity: Number(payload.quantity) };
+//         setItems((p) => p.map((it) => (String(it.id) === String(editing.id) ? updatedCandidate : it)));
+//         setModalOpen(false);
+//         const res = await api.post(`/admin/settings/stock-inventory/update/${editing.id}`, payload);
+//         const raw = res.data?.data ?? res.data?.inventory ?? res.data ?? null;
+//         const updated = raw ? normalizeInventory(raw) : updatedCandidate;
+//         setItems((p) => p.map((it) => (String(it.id) === String(editing.id) ? updated : it)));
+//         toast.success("Inventory updated");
+//       } else {
+//         // optimistic add
+//         const tmpId = `tmp-${Date.now()}`;
+//         const optimistic: Inventory = {
+//           id: tmpId,
+//           product_id: payload.product_id,
+//           quantity: Number(payload.quantity),
+//           type: payload.type,
+//           vendor_id: payload.vendor_id,
+//           note: payload.note,
+//         };
+//         setItems((p) => [optimistic, ...p]);
+//         setModalOpen(false);
+
+//         const res = await api.post("/admin/settings/stock-inventory/add", payload);
+//         const raw = res.data?.data ?? res.data?.inventory ?? res.data ?? null;
+//         const created = raw ? normalizeInventory(raw) : { ...optimistic, id: res.data?.id ?? tmpId };
+//         // replace tmp
+//         setItems((p) => [created, ...p.filter((x) => x.id !== tmpId)]);
+//         toast.success("Inventory added");
+//       }
+
+//       setEditing(null);
+//       setForm(defaultForm);
+//       setFormErrors({});
+//     } catch (err: unknown) {
+//       const { message, details, status } = formatAxiosError(err);
+//       console.error("Save inventory error:", { message, status, details, raw: err });
+
+//       // pull validation errors if present
+//       const ae = err as AxiosError & { response?: any };
+//       const fieldErrs = extractFieldErrors(ae?.response?.data ?? null);
+//       if (fieldErrs) {
+//         setFormErrors((prev) => ({ ...prev, ...fieldErrs }));
+//         toast.error("Validation error — check fields");
+//       } else {
+//         toast.error(message ?? "Failed to save inventory");
+//       }
+
+//       // rollback optimistic on create (safe approach: re-fetch)
+//       await fetchItems();
+//     } finally {
+//       setSaving(false);
+//     }
+//   }
+
+//   function confirmDelete(item: Inventory) {
+//     setDeleteTarget(item);
+//   }
+
+//   async function doDelete() {
+//     if (!deleteTarget) return;
+//     setDeleteLoading(true);
+//     const id = deleteTarget.id;
+//     const prev = items;
+//     // optimistic remove
+//     setItems((p) => p.filter((x) => String(x.id) !== String(id)));
+//     try {
+//       await api.delete(`/admin/settings/stock-inventory/delete/${id}`);
+//       toast.success("Inventory deleted");
+//     } catch (err: unknown) {
+//       const { message, details, status } = formatAxiosError(err);
+//       console.error("Delete inventory error:", { message, status, details, raw: err });
+//       toast.error(message ?? "Failed to delete");
+//       // rollback
+//       setItems(prev);
+//     } finally {
+//       setDeleteLoading(false);
+//       setDeleteTarget(null);
+//     }
+//   }
+
+//   async function handleRefresh() {
+//     setRefreshing(true);
+//     try {
+//       await fetchItems();
+//       toast.success("Inventory refreshed");
+//     } catch {
+//       // fetchItems handles toast
+//     } finally {
+//       setRefreshing(false);
+//     }
+//   }
+
+//   // small controlled input helper
+//   function updateField<K extends keyof FormState>(k: K, v: string) {
+//     setForm((s) => ({ ...s, [k]: v }));
+//     setFormErrors((fe) => ({ ...fe, [k]: undefined }));
+//   }
+
+//   return (
+//     <div className="p-6 max-w-6xl mx-auto">
+//       <Toaster position="top-right" />
+//       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+//         <h2 className="text-2xl font-semibold text-slate-800">Inventory Management</h2>
+
+//         <div className="flex items-center gap-2">
+//           <button
+//             onClick={openAdd}
+//             className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md shadow hover:bg-emerald-700 transition"
+//           >
+//             <Plus className="w-4 h-4" /> Add Inventory
+//           </button>
+
+//           <button
+//             onClick={() => void handleRefresh()}
+//             className="inline-flex items-center gap-2 px-3 py-2 rounded-md border bg-white hover:bg-slate-50 transition"
+//           >
+//             <RefreshCw className="w-4 h-4" />
+//             {refreshing ? "Refreshing..." : "Refresh"}
+//           </button>
+//         </div>
+//       </div>
+
+//       <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+//         <div className="hidden md:block">
+//           <table className="w-full text-sm text-left">
+//             <thead className="bg-slate-50">
+//               <tr>
+//                 <th className="px-4 py-3">ID</th>
+//                 <th className="px-4 py-3">Product ID</th>
+//                 <th className="px-4 py-3">Quantity</th>
+//                 <th className="px-4 py-3">Type</th>
+//                 <th className="px-4 py-3">Vendor</th>
+//                 <th className="px-4 py-3">Note</th>
+//                 <th className="px-4 py-3">When</th>
+//                 <th className="px-4 py-3 w-44">Actions</th>
+//               </tr>
+//             </thead>
+
+//             <tbody>
+//               {loading ? (
+//                 <tr>
+//                   <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+//                     Loading…
+//                   </td>
+//                 </tr>
+//               ) : items.length === 0 ? (
+//                 <tr>
+//                   <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+//                     No inventory records.
+//                   </td>
+//                 </tr>
+//               ) : (
+//                 items.map((it) => (
+//                   <tr key={String(it.id)} className="border-t hover:bg-slate-50 transition">
+//                     <td className="px-4 py-3">{String(it.id).slice(0, 8)}</td>
+//                     <td className="px-4 py-3">{it.product_id}</td>
+//                     <td className="px-4 py-3">{it.quantity}</td>
+//                     <td className="px-4 py-3">{it.type}</td>
+//                     <td className="px-4 py-3">{it.vendor_id ?? "-"}</td>
+//                     <td className="px-4 py-3">{it.note ?? "-"}</td>
+//                     <td className="px-4 py-3">{it.created_at ? new Date(String(it.created_at)).toLocaleString() : "-"}</td>
+//                     <td className="px-4 py-3">
+//                       <div className="flex gap-2">
+//                         <button
+//                           onClick={() => openEdit(it)}
+//                           className="px-3 py-1 rounded border inline-flex items-center gap-2 hover:bg-slate-100 transition"
+//                         >
+//                           <Edit3 className="w-4 h-4" /> Edit
+//                         </button>
+//                         <button
+//                           onClick={() => confirmDelete(it)}
+//                           className="px-3 py-1 rounded bg-red-600 text-white inline-flex items-center gap-2 hover:bg-red-700 transition"
+//                         >
+//                           <Trash2 className="w-4 h-4" /> Delete
+//                         </button>
+//                       </div>
+//                     </td>
+//                   </tr>
+//                 ))
+//               )}
+//             </tbody>
+//           </table>
+//         </div>
+//         {/* mobile cards */}
+//         <div className="md:hidden p-4 grid gap-3">
+//           {loading ? (
+//             <div className="text-center text-slate-500">Loading…</div>
+//           ) : items.length === 0 ? (
+//             <div className="text-center text-slate-500">No inventory records.</div>
+//           ) : (
+//             items.map((it) => (
+//               <div key={String(it.id)} className="border rounded-lg p-3 hover:bg-slate-50 transition">
+//                 <div className="flex justify-between items-start">
+//                   <div>
+//                     <div className="font-medium">Product: {it.product_id}</div>
+//                     <div className="text-sm text-slate-600">Type: {it.type}</div>
+//                   </div>
+//                   <div className="text-right">
+//                     <div className="text-lg font-semibold">{it.quantity}</div>
+//                     <div className="text-xs text-slate-500">{it.created_at ? new Date(String(it.created_at)).toLocaleString() : "-"}</div>
+//                   </div>
+//                 </div>
+//                 <div className="mt-3 text-sm text-slate-600">{it.note ?? "-"}</div>
+//                 <div className="mt-3 flex gap-2">
+//                   <button onClick={() => openEdit(it)} className="flex-1 p-2 border rounded hover:bg-slate-100 inline-flex items-center justify-center gap-2">
+//                     <Edit3 /> Edit
+//                   </button>
+//                   <button onClick={() => confirmDelete(it)} className="flex-1 p-2 rounded bg-red-600 text-white hover:bg-red-700 inline-flex items-center justify-center gap-2">
+//                     <Trash2 /> Delete
+//                   </button>
+//                 </div>
+//               </div>
+//             ))
+//           )}
+//         </div>
+//       </div>
+//       {modalOpen && (
+//         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+//           <div className="absolute inset-0 bg-black/30" onClick={() => setModalOpen(false)} />
+//           <div className="relative bg-white w-full max-w-lg rounded-lg shadow-lg z-10">
+//             <div className="flex items-center justify-between p-4 border-b">
+//               <h3 className="text-lg font-medium">{editing ? "Edit Inventory" : "Add Inventory"}</h3>
+//               <button onClick={() => setModalOpen(false)} className="p-2 rounded hover:bg-slate-100">
+//                 <X className="w-4 h-4" />
+//               </button>
+//             </div>
+//             <form onSubmit={saveItem} className="p-4 space-y-4">
+//               <div>
+//                 <label className="block text-sm font-medium mb-1">Product ID</label>
+//                 <input value={form.product_id} onChange={(e) => updateField("product_id", e.target.value)} className={`w-full p-2 border rounded ${formErrors.product_id ? "border-red-400" : ""}`} placeholder="Enter product id" />
+//                 {formErrors.product_id && <div className="text-xs text-red-500 mt-1">{formErrors.product_id}</div>}
+//               </div>
+
+//               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+//                 <div>
+//                   <label className="block text-sm font-medium mb-1">Quantity</label>
+//                   <input value={form.quantity} onChange={(e) => updateField("quantity", e.target.value)} type="number" min="0" className={`w-full p-2 border rounded ${formErrors.quantity ? "border-red-400" : ""}`} />
+//                   {formErrors.quantity && <div className="text-xs text-red-500 mt-1">{formErrors.quantity}</div>}
+//                 </div>
+
+//                 <div>
+//                   <label className="block text-sm font-medium mb-1">Type</label>
+//                   <select value={form.type} onChange={(e) => updateField("type", e.target.value)} className={`w-full p-2 border rounded ${formErrors.type ? "border-red-400" : ""}`}>
+//                     <option value="in">In (stock in)</option>
+//                     <option value="out">Out (stock out)</option>
+//                   </select>
+//                   {formErrors.type && <div className="text-xs text-red-500 mt-1">{formErrors.type}</div>}
+//                 </div>
+//               </div>
+
+//               <div>
+//                 <label className="block text-sm font-medium mb-1">Vendor ID (optional)</label>
+//                 <input value={form.vendor_id} onChange={(e) => updateField("vendor_id", e.target.value)} className="w-full p-2 border rounded" />
+//               </div>
+
+//               <div>
+//                 <label className="block text-sm font-medium mb-1">Note (optional)</label>
+//                 <textarea value={form.note} onChange={(e) => updateField("note", e.target.value)} className="w-full p-2 border rounded" rows={3} />
+//               </div>
+
+//               <div className="flex justify-end gap-2">
+//                 <button type="button" onClick={() => { setModalOpen(false); setEditing(null); }} className="px-4 py-2 rounded border hover:bg-slate-100">Cancel</button>
+//                 <button type="submit" disabled={saving} className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+//                   {saving ? (editing ? "Saving…" : "Adding…") : editing ? "Save Changes" : "Add Inventory"}
+//                 </button>
+//               </div>
+//             </form>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* Delete confirm */}
+//       {deleteTarget && (
+//         <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+//           <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteTarget(null)} />
+//           <div className="relative bg-white w-full max-w-md rounded-lg shadow-lg z-10 p-5">
+//             <h3 className="text-lg font-medium">Confirm delete</h3>
+//             <p className="text-sm text-slate-600 mt-2">Are you sure you want to delete this inventory record (product {deleteTarget.product_id})?</p>
+//             <div className="mt-4 flex justify-end gap-2">
+//               <button onClick={() => setDeleteTarget(null)} disabled={deleteLoading} className="px-3 py-1 rounded border hover:bg-slate-100">Cancel</button>
+//               <button onClick={() => void doDelete()} disabled={deleteLoading} className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700">
+//                 {deleteLoading ? "Deleting…" : "Yes, delete"}
+//               </button>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+//     </div>
+//   );
+// };
+// export default InventoryManager;
+
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { Plus, Edit3, Trash2, X, RefreshCw } from "lucide-react";
+import toast, { Toaster } from "react-hot-toast";
+import api from "@/api/axios";
+import type { AxiosError } from "axios";
+
+/**
+ * Inventory record shape
+ */
+type Inventory = {
+  id: string | number;
+  product_id: string | number;
+  quantity: number;
+  type: "in" | "out" | string;
+  vendor_id?: string | number | null;
+  note?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+/**
+ * Form shape
+ */
+type FormState = {
+  product_id: string;
+  quantity: string; // keep as string for input and convert when sending
+  type: string;
+  vendor_id: string;
+  note: string;
+};
+
+const defaultForm: FormState = { product_id: "", quantity: "0", type: "in", vendor_id: "", note: "" };
+
+/* ----------------------
+   Error helpers (robust)
+   ---------------------- */
+function formatAxiosError(err: unknown) {
+  const fallback = { message: "An unknown error occurred", details: null as any, status: undefined as number | undefined };
+  try {
+    if (!err) return fallback;
+    const ae = err as AxiosError & { response?: any; request?: any };
+    if (ae && (ae.isAxiosError || ae.response || ae.request)) {
+      const status = ae.response?.status;
+      const data = ae.response?.data;
+      let message = ae.message || "Request failed";
+      if (data) {
+        if (typeof data === "string") message = data;
+        else if (data.message) message = data.message;
+        else if (data.error) message = data.error;
+        else if (data.errors && typeof data.errors === "string") message = data.errors;
+      }
+      return { message: String(message), details: data ?? ae.response ?? ae.request ?? ae.stack, status };
     }
-  };
+    if (err instanceof Error) return { message: err.message, details: err.stack, status: undefined };
+    if (typeof err === "string") return { message: err, details: null, status: undefined };
+    return { message: "Unknown error", details: JSON.stringify(err), status: undefined };
+  } catch (e) {
+    return { message: "Error while parsing error", details: e, status: undefined };
+  }
+}
+
+/**
+ * Try to extract field-level validation errors from the server response.
+ */
+function extractFieldErrors(responseData: any): Record<string, string> | null {
+  if (!responseData) return null;
+  if (responseData.errors && typeof responseData.errors === "object") {
+    const out: Record<string, string> = {};
+    for (const k of Object.keys(responseData.errors)) {
+      const v = responseData.errors[k];
+      out[k] = Array.isArray(v) ? String(v[0]) : String(v);
+    }
+    return out;
+  }
+  if (responseData.validation && typeof responseData.validation === "object") {
+    const out: Record<string, string> = {};
+    for (const k of Object.keys(responseData.validation)) {
+      const v = responseData.validation[k];
+      out[k] = Array.isArray(v) ? String(v[0]) : String(v);
+    }
+    return out;
+  }
+  const possible = ["product_id", "quantity", "type", "vendor_id", "note"];
+  const out: Record<string, string> = {};
+  let found = false;
+  for (const f of possible) {
+    if (responseData[f]) {
+      out[f] = String(responseData[f]);
+      found = true;
+    }
+  }
+  return found ? out : null;
+}
+
+/* -------------------------
+   Inventory component
+   ------------------------- */
+const InventoryManager: React.FC = () => {
+  const [items, setItems] = useState<Inventory[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Inventory | null>(null);
+  const [form, setForm] = useState<FormState>(defaultForm);
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState<Inventory | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // products from API (for dropdown)
+  const [products, setProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+
+  // vendors from API (for vendor dropdown)
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [vendorsLoading, setVendorsLoading] = useState(false);
+
+  // Product & Vendor endpoints (local network)
+  const PRODUCTS_URL = "http://192.168.1.6:8000/api/admin/products/show";
+  const VENDORS_URL = "http://192.168.1.6:8000/api/admin/settings/vendors/show";
+
+  // Fetch products used in dropdown
+  async function fetchProductsList() {
+    setProductsLoading(true);
+    try {
+      const res = await api.get(PRODUCTS_URL);
+      const body = res.data;
+      const rows: any[] = Array.isArray(body)
+        ? body
+        : Array.isArray(body?.data)
+        ? body.data
+        : Array.isArray(body?.products)
+        ? body.products
+        : Array.isArray(body?.rows)
+        ? body.rows
+        : [];
+      setProducts(rows);
+    } catch (err: unknown) {
+      const { message, status } = formatAxiosError(err);
+      console.error("Failed to load products for dropdown:", err);
+      if (status === 401) toast.error("Unauthorized while fetching products");
+      else toast.error(message || "Failed to load products");
+      setProducts([]);
+    } finally {
+      setProductsLoading(false);
+    }
+  }
+
+  // Fetch vendors for vendor dropdown
+  async function fetchVendorsList() {
+    setVendorsLoading(true);
+    try {
+      const res = await api.get(VENDORS_URL);
+      const body = res.data;
+      const rows: any[] = Array.isArray(body)
+        ? body
+        : Array.isArray(body?.data)
+        ? body.data
+        : Array.isArray(body?.vendors)
+        ? body.vendors
+        : Array.isArray(body?.rows)
+        ? body.rows
+        : [];
+      setVendors(rows);
+    } catch (err: unknown) {
+      const { message, status } = formatAxiosError(err);
+      console.error("Failed to load vendors for dropdown:", err);
+      if (status === 401) toast.error("Unauthorized while fetching vendors");
+      else toast.error(message || "Failed to load vendors");
+      setVendors([]);
+    } finally {
+      setVendorsLoading(false);
+    }
+  }
+
+  // productOptions normalized
+  const productOptions = products
+    .map((p) => {
+      const id = p?.id ?? p?._id ?? p?.product_id ?? p?.productId ?? "";
+      const name = p?.name ?? p?.title ?? "";
+      if (id === null || id === undefined || id === "") return null;
+      return { id: String(id), label: name ? `${id} — ${name}` : String(id) };
+    })
+    .filter(Boolean) as { id: string; label: string }[];
+
+  // vendorOptions normalized
+  const vendorOptions = vendors
+    .map((v) => {
+      const id = v?.id ?? v?._id ?? v?.vendor_id ?? v?.vendorId ?? "";
+      const name = v?.name ?? v?.title ?? v?.company ?? "";
+      if (id === null || id === undefined || id === "") return null;
+      return { id: String(id), label: name ? `${id} — ${name}` : String(id) };
+    })
+    .filter(Boolean) as { id: string; label: string }[];
+
+  // --- Inventory API helpers ---
+  async function fetchItems() {
+    setLoading(true);
+    try {
+      const res = await api.get("/admin/settings/stock-inventory/show");
+      const body = res.data;
+      const rows: any[] = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : body?.inventory ?? body?.items ?? [];
+      setItems(rows.map((r: any) => normalizeInventory(r)));
+    } catch (err: unknown) {
+      const { message, status } = formatAxiosError(err);
+      console.error("Failed to load inventory:", err);
+      if (status === 401) toast.error("Unauthorized — please login.");
+      else toast.error(message || "Failed to load inventory");
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function normalizeInventory(raw: any): Inventory {
+    return {
+      id: raw.id ?? raw._id ?? raw.inventory_id ?? raw.inventoryId ?? String(Date.now()) + Math.random(),
+      product_id: raw.product_id ?? raw.productId ?? raw.product ?? raw?.item_id ?? raw?.sku ?? "",
+      quantity: Number(raw.quantity ?? raw.qty ?? 0),
+      type: raw.type ?? "in",
+      vendor_id: raw.vendor_id ?? raw.vendorId ?? raw.vendor ?? null,
+      note: raw.note ?? raw.notes ?? null,
+      created_at: raw.created_at ?? raw.createdAt ?? null,
+      updated_at: raw.updated_at ?? raw.updatedAt ?? null,
+    };
+  }
+
+  // mount: fetch both lists
+  useEffect(() => {
+    void fetchProductsList();
+    void fetchVendorsList();
+    void fetchItems();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // open add modal
+  function openAdd() {
+    setEditing(null);
+    setForm(defaultForm);
+    setFormErrors({});
+    setModalOpen(true);
+    if (!products.length) void fetchProductsList();
+    if (!vendors.length) void fetchVendorsList();
+  }
+  // open edit
+  function openEdit(it: Inventory) {
+    setEditing(it);
+    setForm({
+      product_id: String(it.product_id ?? ""),
+      quantity: String(it.quantity ?? 0),
+      type: String(it.type ?? "in"),
+      vendor_id: String(it.vendor_id ?? ""),
+      note: String(it.note ?? ""),
+    });
+    setFormErrors({});
+    setModalOpen(true);
+  }
+
+  // validation
+  function validateForm(): boolean {
+    const e: Record<string, string> = {};
+    if (!form.product_id.trim()) e.product_id = "Product is required";
+    if (form.quantity === "" || Number.isNaN(Number(form.quantity))) e.quantity = "Quantity is required and must be a number";
+    else if (Number(form.quantity) <= 0) e.quantity = "Quantity must be > 0";
+    if (!form.type.trim()) e.type = "Type is required";
+    setFormErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  // create or update
+  async function saveItem(e?: React.FormEvent) {
+    e?.preventDefault();
+    if (!validateForm()) {
+      toast.error("Fix validation errors");
+      return;
+    }
+    setSaving(true);
+    try {
+      const payload = {
+        product_id: form.product_id,
+        quantity: Number(form.quantity),
+        type: form.type,
+        vendor_id: form.vendor_id || null,
+        note: form.note || null,
+      };
+
+      if (editing) {
+        const updatedCandidate: Inventory = { ...editing, ...payload, quantity: Number(payload.quantity) };
+        setItems((p) => p.map((it) => (String(it.id) === String(editing.id) ? updatedCandidate : it)));
+        setModalOpen(false);
+        const res = await api.post(`/admin/settings/stock-inventory/update/${editing.id}`, payload);
+        const raw = res.data?.data ?? res.data?.inventory ?? res.data ?? null;
+        const updated = raw ? normalizeInventory(raw) : updatedCandidate;
+        setItems((p) => p.map((it) => (String(it.id) === String(editing.id) ? updated : it)));
+        toast.success("Inventory updated");
+      } else {
+        const tmpId = `tmp-${Date.now()}`;
+        const optimistic: Inventory = {
+          id: tmpId,
+          product_id: payload.product_id,
+          quantity: Number(payload.quantity),
+          type: payload.type,
+          vendor_id: payload.vendor_id,
+          note: payload.note,
+        };
+        setItems((p) => [optimistic, ...p]);
+        setModalOpen(false);
+
+        const res = await api.post("/admin/settings/stock-inventory/add", payload);
+        const raw = res.data?.data ?? res.data?.inventory ?? res.data ?? null;
+        const created = raw ? normalizeInventory(raw) : { ...optimistic, id: res.data?.id ?? tmpId };
+        setItems((p) => [created, ...p.filter((x) => x.id !== tmpId)]);
+        toast.success("Inventory added");
+      }
+
+      setEditing(null);
+      setForm(defaultForm);
+      setFormErrors({});
+    } catch (err: unknown) {
+      const { message, details, status } = formatAxiosError(err);
+      console.error("Save inventory error:", { message, status, details, raw: err });
+
+      const ae = err as AxiosError & { response?: any };
+      const fieldErrs = extractFieldErrors(ae?.response?.data ?? null);
+      if (fieldErrs) {
+        setFormErrors((prev) => ({ ...prev, ...fieldErrs }));
+        toast.error("Validation error — check fields");
+      } else {
+        toast.error(message ?? "Failed to save inventory");
+      }
+
+      // re-fetch to rollback optimistic changes if any
+      await fetchItems();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function confirmDelete(item: Inventory) {
+    setDeleteTarget(item);
+  }
+
+  async function doDelete() {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    const id = deleteTarget.id;
+    const prev = items;
+    setItems((p) => p.filter((x) => String(x.id) !== String(id)));
+    try {
+      await api.delete(`/admin/settings/stock-inventory/delete/${id}`);
+      toast.success("Inventory deleted");
+    } catch (err: unknown) {
+      const { message, details, status } = formatAxiosError(err);
+      console.error("Delete inventory error:", { message, status, details, raw: err });
+      toast.error(message ?? "Failed to delete");
+      setItems(prev);
+    } finally {
+      setDeleteLoading(false);
+      setDeleteTarget(null);
+    }
+  }
+
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await fetchItems();
+      await fetchProductsList();
+      await fetchVendorsList();
+      toast.success("Inventory, products & vendors refreshed");
+    } catch {
+      // handled in inner functions
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
+  // small controlled input helper
+  function updateField<K extends keyof FormState>(k: K, v: string) {
+    setForm((s) => ({ ...s, [k]: v }));
+    setFormErrors((fe) => ({ ...fe, [k]: undefined }));
+  }
 
   return (
-    <div className="p-4 lg:p-6">
-      {/* Header / breadcrumb */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-800">SKU</h1>
-          <div className="text-sm text-slate-500 mt-1">
-            <a href="/" className="text-sky-500 hover:underline">
-              Home
-            </a>{" "}
-            <span className="mx-2"> - </span> SKU
-          </div>
+    <div className="p-6 max-w-6xl mx-auto">
+      <Toaster position="top-right" />
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h2 className="text-2xl font-semibold text-slate-800">Inventory Management</h2>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openAdd}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-md shadow hover:bg-emerald-700 transition"
+          >
+            <Plus className="w-4 h-4" /> Add Inventory
+          </button>
+
+          <button
+            onClick={() => void handleRefresh()}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-md border bg-white hover:bg-slate-50 transition"
+          >
+            <RefreshCw className="w-4 h-4" />
+            {refreshing ? "Refreshing..." : "Refresh"}
+          </button>
         </div>
       </div>
 
-      {/* Search form area */}
-      <section className="bg-[#f5f6fa] p-6 rounded-md mb-6">
-        <form
-          onSubmit={handleSubmit}
-          className="grid grid-cols-1 gap-4 lg:grid-cols-12 lg:items-end"
-          noValidate
-        >
-          {/* Category - left column (3/12) */}
-          <div className="lg:col-span-3">
-            <label htmlFor="sku-category" className="block text-sm font-medium text-slate-700 mb-2">
-              Category <span className="text-red-500">*</span>
-            </label>
+      <div className="bg-white rounded-lg shadow-sm border overflow-hidden">
+        <div className="hidden md:block">
+          <table className="w-full text-sm text-left">
+            <thead className="bg-slate-50">
+              <tr>
+                <th className="px-4 py-3">ID</th>
+                <th className="px-4 py-3">Product ID</th>
+                <th className="px-4 py-3">Quantity</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Vendor</th>
+                <th className="px-4 py-3">Note</th>
+                <th className="px-4 py-3">When</th>
+                <th className="px-4 py-3 w-44">Actions</th>
+              </tr>
+            </thead>
 
-            <select
-              id="sku-category"
-              aria-label={formatAria("Category", true)}
-              aria-invalid={!!(touched.category && errors.category)}
-              aria-describedby={touched.category && errors.category ? "sku-category-error" : undefined}
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setTouched((s) => ({ ...s, category: true }));
-              }}
-              onBlur={() => setTouched((s) => ({ ...s, category: true }))}
-              className={`w-full h-11 px-3 py-2 rounded border transition focus:outline-none focus:ring-2 focus:ring-sky-300 ${
-                touched.category && errors.category ? "border-red-300" : "border-slate-200"
-              } bg-white`}
-            >
-              <option value="">Select category</option>
-              {SAMPLE_CATEGORIES.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
-
-            {touched.category && errors.category && (
-              <p id="sku-category-error" className="mt-1 text-sm text-red-600">
-                {errors.category}
-              </p>
-            )}
-          </div>
-
-          {/* Item Name - middle column (6/12) */}
-          <div className="lg:col-span-6">
-            <label htmlFor="sku-item" className="block text-sm font-medium text-slate-700 mb-2">
-              Item Name
-            </label>
-            <input
-              id="sku-item"
-              aria-label={formatAria("Item Name")}
-              aria-invalid={!!(touched.itemName && errors.itemName)}
-              aria-describedby={touched.itemName && errors.itemName ? "sku-item-error" : undefined}
-              type="text"
-              value={itemName}
-              onChange={(e) => setItemName(e.target.value)}
-              onBlur={() => setTouched((s) => ({ ...s, itemName: true }))}
-              placeholder="Item Name"
-              className={`w-full h-11 px-3 py-2 rounded border transition focus:outline-none focus:ring-2 focus:ring-sky-300 ${
-                touched.itemName && errors.itemName ? "border-red-300" : "border-slate-200"
-              } bg-white`}
-            />
-            {touched.itemName && errors.itemName && (
-              <p id="sku-item-error" className="mt-1 text-sm text-red-600">
-                {errors.itemName}
-              </p>
-            )}
-          </div>
-
-          {/* Search button - right column (3/12) */}
-          <div className="lg:col-span-3 flex justify-start lg:justify-end">
-            <button
-              type="submit"
-              disabled={isSearching || !category}
-              className={`inline-flex items-center justify-center px-6 py-2 h-11 rounded shadow text-white font-semibold transition focus:outline-none focus:ring-2 focus:ring-indigo-400 ${
-                isSearching || !category
-                  ? "bg-indigo-400 cursor-not-allowed"
-                  : "bg-indigo-700 hover:bg-indigo-800"
-              }`}
-              aria-disabled={isSearching || !category}
-              title={!category ? "Please select a category" : "Search SKUs"}
-            >
-              {isSearching ? "Searching..." : "SEARCH"}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {/* Results area */}
-      <section className="bg-white rounded-lg shadow p-6 min-h-[420px]">
-        {!resultsPresent ? (
-          <div className="h-[420px] flex flex-col items-center justify-center text-slate-400">
-            <p className="text-lg font-medium">No results</p>
-            <p className="text-sm mt-1">Select a category and click SEARCH to view SKUs</p>
-          </div>
-        ) : (
-          <div>
-            {/* Replace with your results table / grid */}
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-left">
-                <thead className="text-sm text-slate-700">
-                  <tr>
-                    <th className="px-3 py-2">#</th>
-                    <th className="px-3 py-2">SKU</th>
-                    <th className="px-3 py-2">Item</th>
-                    <th className="px-3 py-2">Category</th>
-                    <th className="px-3 py-2">Actions</th>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                    Loading…
+                  </td>
+                </tr>
+              ) : items.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-4 py-6 text-center text-slate-500">
+                    No inventory records.
+                  </td>
+                </tr>
+              ) : (
+                items.map((it) => (
+                  <tr key={String(it.id)} className="border-t hover:bg-slate-50 transition">
+                    <td className="px-4 py-3">{String(it.id).slice(0, 8)}</td>
+                    <td className="px-4 py-3">{it.product_id}</td>
+                    <td className="px-4 py-3">{it.quantity}</td>
+                    <td className="px-4 py-3">{it.type}</td>
+                    <td className="px-4 py-3">{it.vendor_id ?? "-"}</td>
+                    <td className="px-4 py-3">{it.note ?? "-"}</td>
+                    <td className="px-4 py-3">{it.created_at ? new Date(String(it.created_at)).toLocaleString() : "-"}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => openEdit(it)}
+                          className="px-3 py-1 rounded border inline-flex items-center gap-2 hover:bg-slate-100 transition"
+                        >
+                          <Edit3 className="w-4 h-4" /> Edit
+                        </button>
+                        <button
+                          onClick={() => confirmDelete(it)}
+                          className="px-3 py-1 rounded bg-red-600 text-white inline-flex items-center gap-2 hover:bg-red-700 transition"
+                        >
+                          <Trash2 className="w-4 h-4" /> Delete
+                        </button>
+                      </div>
+                    </td>
                   </tr>
-                </thead>
-                <tbody>{/* rows */}</tbody>
-              </table>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* mobile cards */}
+        <div className="md:hidden p-4 grid gap-3">
+          {loading ? (
+            <div className="text-center text-slate-500">Loading…</div>
+          ) : items.length === 0 ? (
+            <div className="text-center text-slate-500">No inventory records.</div>
+          ) : (
+            items.map((it) => (
+              <div key={String(it.id)} className="border rounded-lg p-3 hover:bg-slate-50 transition">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-medium">Product: {it.product_id}</div>
+                    <div className="text-sm text-slate-600">Type: {it.type}</div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-semibold">{it.quantity}</div>
+                    <div className="text-xs text-slate-500">{it.created_at ? new Date(String(it.created_at)).toLocaleString() : "-"}</div>
+                  </div>
+                </div>
+                <div className="mt-3 text-sm text-slate-600">{it.note ?? "-"}</div>
+                <div className="mt-3 flex gap-2">
+                  <button onClick={() => openEdit(it)} className="flex-1 p-2 border rounded hover:bg-slate-100 inline-flex items-center justify-center gap-2">
+                    <Edit3 /> Edit
+                  </button>
+                  <button onClick={() => confirmDelete(it)} className="flex-1 p-2 rounded bg-red-600 text-white hover:bg-red-700 inline-flex items-center justify-center gap-2">
+                    <Trash2 /> Delete
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setModalOpen(false)} />
+          <div className="relative bg-white w-full max-w-lg rounded-lg shadow-lg z-10">
+            <div className="flex items-center justify-between p-4 border-b">
+              <h3 className="text-lg font-medium">{editing ? "Edit Inventory" : "Add Inventory"}</h3>
+              <button onClick={() => setModalOpen(false)} className="p-2 rounded hover:bg-slate-100">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <form onSubmit={saveItem} className="p-4 space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Product ID</label>
+                <select
+                  value={form.product_id}
+                  onChange={(e) => updateField("product_id", e.target.value)}
+                  className={`w-full p-2 border rounded ${formErrors.product_id ? "border-red-400" : ""}`}
+                >
+                  <option value="">-- select product --</option>
+                  {productOptions.map((opt) => (
+                    <option key={opt.id} value={opt.id}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </select>
+                {productOptions.length === 0 ? (
+                  <div className="text-xs text-slate-500 mt-1">{productsLoading ? "Loading products…" : "No products available."}</div>
+                ) : (
+                  <div className="text-xs text-slate-400 mt-1">Choose product by id (label shows id — name)</div>
+                )}
+                {formErrors.product_id && <div className="text-xs text-red-500 mt-1">{formErrors.product_id}</div>}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Quantity</label>
+                  <input value={form.quantity} onChange={(e) => updateField("quantity", e.target.value)} type="number" min="0" className={`w-full p-2 border rounded ${formErrors.quantity ? "border-red-400" : ""}`} />
+                  {formErrors.quantity && <div className="text-xs text-red-500 mt-1">{formErrors.quantity}</div>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Type</label>
+                  <select value={form.type} onChange={(e) => updateField("type", e.target.value)} className={`w-full p-2 border rounded ${formErrors.type ? "border-red-400" : ""}`}>
+                    <option value="in">In (stock in)</option>
+                    <option value="out">Out (stock out)</option>
+                  </select>
+                  {formErrors.type && <div className="text-xs text-red-500 mt-1">{formErrors.type}</div>}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Vendor (optional)</label>
+                <select value={form.vendor_id} onChange={(e) => updateField("vendor_id", e.target.value)} className="w-full p-2 border rounded">
+                  <option value="">-- select vendor (optional) --</option>
+                  {vendorOptions.map((v) => (
+                    <option key={v.id} value={v.id}>
+                      {v.label}
+                    </option>
+                  ))}
+                </select>
+                {vendorOptions.length === 0 ? (
+                  <div className="text-xs text-slate-500 mt-1">{vendorsLoading ? "Loading vendors…" : "No vendors available."}</div>
+                ) : (
+                  <div className="text-xs text-slate-400 mt-1">Choose vendor by id (label shows id — name)</div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Note (optional)</label>
+                <textarea value={form.note} onChange={(e) => updateField("note", e.target.value)} className="w-full p-2 border rounded" rows={3} />
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => { setModalOpen(false); setEditing(null); }} className="px-4 py-2 rounded border hover:bg-slate-100">Cancel</button>
+                <button type="submit" disabled={saving} className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">
+                  {saving ? (editing ? "Saving…" : "Adding…") : editing ? "Save Changes" : "Add Inventory"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
+          <div className="absolute inset-0 bg-black/30" onClick={() => setDeleteTarget(null)} />
+          <div className="relative bg-white w-full max-w-md rounded-lg shadow-lg z-10 p-5">
+            <h3 className="text-lg font-medium">Confirm delete</h3>
+            <p className="text-sm text-slate-600 mt-2">Are you sure you want to delete this inventory record (product {deleteTarget.product_id})?</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setDeleteTarget(null)} disabled={deleteLoading} className="px-3 py-1 rounded border hover:bg-slate-100">Cancel</button>
+              <button onClick={() => void doDelete()} disabled={deleteLoading} className="px-3 py-1 rounded bg-red-600 text-white hover:bg-red-700">
+                {deleteLoading ? "Deleting…" : "Yes, delete"}
+              </button>
             </div>
           </div>
-        )}
-      </section>
+        </div>
+      )}
     </div>
   );
 };
 
-export default Sku;
+export default InventoryManager;
+
+
