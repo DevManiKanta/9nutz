@@ -807,57 +807,47 @@ export default function POS(): JSX.Element {
   };
   const validName = (n: string) => n.trim().length > 0;
 
-  // Checkout uses axios as well (POST /orders), now includes customer name & phone
   async function handleCheckout() {
-    if (cartLines.length === 0) {
-      toast.error("Cart is empty");
-      return;
-    }
-    if (!validName(customerName)) {
-      toast.error("Enter customer name");
-      return;
-    }
-    if (!validPhone(customerPhone)) {
-      toast.error("Enter valid phone number (min 10 digits)");
-      return;
-    }
+  if (cartLines.length === 0) { toast.error("Cart is empty"); return; }
+  if (!validName(customerName)) { toast.error("Enter customer name"); return; }
+  if (!validPhone(customerPhone)) { toast.error("Enter valid phone number (min 10 digits)"); return; }
 
-    setIsCheckingOut(true);
-    const payload = {
-      customer: {
-        name: customerName.trim(),
-        phone: customerPhone.replace(/\D/g, "")
-      },
-      items: cartLines.map((l) => ({ product_id: l.product.id, name: l.product.name, qty: l.qty, price: l.product.price })),
-      subtotal: subTotal,
-      gst_percent: gstPercent,
-      gst_amount: gstAmount,
-      discount: { ...discount },
-      total,
-      timestamp: new Date().toISOString(),
-    };
-    try {
-      const res = await api.post("/orders", payload); // ensure api.baseURL routes to correct orders host or create a second axios instance
-      const body = res.data;
-      toast.success("Purchase successful");
-      setCartMap({});
-      setCartOpen(false);
-      setCustomerName("");
-      setCustomerPhone("");
-      if (body?.order_id) toast.success(`Order ${body.order_id} created`);
-    } catch (err: any) {
-      console.error("Checkout error", err);
-      // fallback local behavior on error
-      toast.error("Network error when sending order — purchase saved locally (demo mode)");
-      setCartMap({});
-      setCartOpen(false);
-      setCustomerName("");
-      setCustomerPhone("");
-    } finally {
-      setIsCheckingOut(false);
-    }
+  setIsCheckingOut(true);
+
+  const payload = {
+    name: customerName.trim(),
+    phone: customerPhone.replace(/\D/g, ""),
+    items: cartLines.map(l => ({
+      product_id: typeof l.product.id === "string" && /^\d+$/.test(l.product.id) ? Number(l.product.id) : l.product.id,
+      name: l.product.name,
+      qty: l.qty,
+      price: l.product.price
+    })),
+    subtotal: subTotal,
+    gst_percent: gstPercent,
+    gst_amount: gstAmount,
+    discount_type: discount.type,    
+    discount_value: discount.value,  
+    total,
+  };
+  console.log("PAYLOAD",payload)  
+  try {
+    const res = await api.post("admin/pos-orders/create", payload, {
+      headers: { "Content-Type": "application/json" }
+    });
+    const body = res.data;
+    toast.success("Purchase successful");
+    setCartMap({});
+    setCartOpen(false);
+    setCustomerName("");
+    setCustomerPhone("");
+    if (body?.order_id) toast.success(`Order ${body.order_id} created`);
+  } catch (err: any) {
+    toast.error("Network/server error while creating order");
+  } finally {
+    setIsCheckingOut(false);
   }
-
+}
   // PRODUCTS CRUD via api instance
   async function apiCreateProduct(name: string, price: number, file?: File | null) {
     const fd = new FormData();
