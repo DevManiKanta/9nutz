@@ -1,10 +1,11 @@
 // src/lib/axios.ts
 import axios, { AxiosError, AxiosInstance } from "axios";
 
-const BASE_URL = "http://192.168.1.6:8000/api";
+const BASE_URL_1 = "http://192.168.1.6:8001/api";
+const BASE_URL_2 ="http://192.168.29.100:8001/api";
 
 const api: AxiosInstance = axios.create({
-  baseURL: BASE_URL,
+  baseURL: BASE_URL_2,
   timeout: 30_000,
   headers: {
     "Content-Type": "application/json",
