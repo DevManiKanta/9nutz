@@ -2,7 +2,7 @@
 import axios, { AxiosError, AxiosInstance } from "axios";
 
 const BASE_URL_1 = "http://192.168.1.6:8001/api";
-const BASE_URL_2 ="http://192.168.29.100:8001/api";
+const BASE_URL_2 ="https://9nutsapi.nearbydoctors.in/public/api";
 
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL_2,

@@ -1,6 +1,6 @@
 
 // import React, { useEffect, useMemo, useRef, useState } from "react";
-// import { Search, ShoppingCart, X, Plus, Minus, Trash2, Edit3, RefreshCw } from "lucide-react";
+// import { Search, ShoppingCart, X, Plus, Minus, Trash2 } from "lucide-react";
 // import toast, { Toaster } from "react-hot-toast";
 // import api from '../api/axios'
 
@@ -49,6 +49,10 @@
 //   const [deleteTarget, setDeleteTarget] = useState<{ id: string | number; name?: string } | null>(null);
 //   const [deleteLoading, setDeleteLoading] = useState(false);
 //   const imageInputRef = useRef<HTMLInputElement | null>(null);
+
+//   // New: customer details for checkout
+//   const [customerName, setCustomerName] = useState<string>("");
+//   const [customerPhone, setCustomerPhone] = useState<string>("");
 
 //   // Helper: normalize raw server product -> Product
 //   const normalizeServerProduct = (r: any, fallbackIndex = 0): Product => {
@@ -124,12 +128,14 @@
 //     return p.name.toLowerCase().includes(q) || String(p.sku || "").toLowerCase().includes(q) || String(p.category || "").toLowerCase().includes(q);
 //   });
 
+//   // Add to cart — DO NOT open cart automatically (user requested)
 //   function addToCart(product: Product, qty = 1) {
 //     setCartMap((m) => {
 //       const key = String(product.id);
 //       const nextQty = (m[key] ?? 0) + qty;
 //       return { ...m, [key]: nextQty };
 //     });
+//     // DO NOT call setCartOpen(true) here — cart opens only when user clicks cart button
 //     toast.success(`${product.name} added to cart`);
 //   }
 
@@ -170,40 +176,54 @@
 //     });
 //   }
 
-//   // Checkout uses axios as well (POST /orders)
-//   async function handleCheckout() {
-//     if (cartLines.length === 0) {
-//       toast.error("Cart is empty");
-//       return;
-//     }
-//     setIsCheckingOut(true);
-//     const payload = {
-//       items: cartLines.map((l) => ({ product_id: l.product.id, name: l.product.name, qty: l.qty, price: l.product.price })),
-//       subtotal: subTotal,
-//       gst_percent: gstPercent,
-//       gst_amount: gstAmount,
-//       discount: { ...discount },
-//       total,
-//       timestamp: new Date().toISOString(),
-//     };
-//     try {
-//       const res = await api.post("/orders", payload); // ensure api.baseURL routes to correct orders host or create a second axios instance
-//       const body = res.data;
-//       toast.success("Purchase successful");
-//       setCartMap({});
-//       setCartOpen(false);
-//       if (body?.order_id) toast.success(`Order ${body.order_id} created`);
-//     } catch (err: any) {
-//       console.error("Checkout error", err);
-//       // fallback local behavior on error
-//       toast.error("Network error when sending order — purchase saved locally (demo mode)");
-//       setCartMap({});
-//       setCartOpen(false);
-//     } finally {
-//       setIsCheckingOut(false);
-//     }
-//   }
+//   // Simple phone validator (digits only, at least 10)
+//   const validPhone = (p: string) => {
+//     const cleaned = p.replace(/\D/g, "");
+//     return cleaned.length >= 10;
+//   };
+//   const validName = (n: string) => n.trim().length > 0;
 
+//   async function handleCheckout() {
+//   if (cartLines.length === 0) { toast.error("Cart is empty"); return; }
+//   if (!validName(customerName)) { toast.error("Enter customer name"); return; }
+//   if (!validPhone(customerPhone)) { toast.error("Enter valid phone number (min 10 digits)"); return; }
+
+//   setIsCheckingOut(true);
+
+//   const payload = {
+//     name: customerName.trim(),
+//     phone: customerPhone.replace(/\D/g, ""),
+//     items: cartLines.map(l => ({
+//       product_id: typeof l.product.id === "string" && /^\d+$/.test(l.product.id) ? Number(l.product.id) : l.product.id,
+//       name: l.product.name,
+//       qty: l.qty,
+//       price: l.product.price
+//     })),
+//     subtotal: subTotal,
+//     gst_percent: gstPercent,
+//     gst_amount: gstAmount,
+//     discount_type: discount.type,    
+//     discount_value: discount.value,  
+//     total,
+//   };
+//   console.log("PAYLOAD",payload)  
+//   try {
+//     const res = await api.post("admin/pos-orders/create", payload, {
+//       headers: { "Content-Type": "application/json" }
+//     });
+//     const body = res.data;
+//     toast.success("Purchase successful");
+//     setCartMap({});
+//     setCartOpen(false);
+//     setCustomerName("");
+//     setCustomerPhone("");
+//     if (body?.order_id) toast.success(`Order ${body.order_id} created`);
+//   } catch (err: any) {
+//     toast.error("Network/server error while creating order");
+//   } finally {
+//     setIsCheckingOut(false);
+//   }
+// }
 //   // PRODUCTS CRUD via api instance
 //   async function apiCreateProduct(name: string, price: number, file?: File | null) {
 //     const fd = new FormData();
@@ -365,6 +385,12 @@
 //     }
 //   }
 
+//   // utility: fallback image generation
+//   const fallbackFor = (p: Product) => {
+//     const seed = encodeURIComponent(p.category || p.name.split(" ")[0] || "product");
+//     return `https://source.unsplash.com/featured/400x400/?${seed}`;
+//   };
+
 //   return (
 //     <div className="min-h-screen bg-gray-50 p-6">
 //       <Toaster position="top-right" />
@@ -413,7 +439,8 @@
 //               ))
 //             : visibleProducts.map((p) => {
 //                 const inCartQty = cartMap[String(p.id)] ?? 0;
-//                 const imageSrc = p.image_url ?? p.image ?? `https://source.unsplash.com/featured/400x400/?${encodeURIComponent(p.category || p.name.split(" ")[0])}`;
+//                 // prefer image_url then image
+//                 const imageSrc = p.image_url ?? p.image ?? fallbackFor(p);
 //                 return (
 //                   <div key={p.id} className="p-3 border rounded-lg flex flex-col">
 //                     <div className="w-full h-40 rounded-lg overflow-hidden bg-white flex items-center justify-center mb-3">
@@ -422,7 +449,7 @@
 //                         alt={p.name}
 //                         className="object-cover w-full h-full"
 //                         onError={(e) => {
-//                           (e.currentTarget as HTMLImageElement).src = `https://source.unsplash.com/featured/400x400/?${encodeURIComponent(p.category || p.name.split(" ")[0])}`;
+//                           (e.currentTarget as HTMLImageElement).src = fallbackFor(p);
 //                         }}
 //                       />
 //                     </div>
@@ -460,7 +487,7 @@
 //       </div>
 
 //       {/* Cart drawer */}
-//       <div className={`fixed inset-0 z-50 pointer-events-${cartOpen ? "auto" : "none"}`} aria-hidden={!cartOpen}>
+//       <div className={`fixed inset-0 z-50 ${cartOpen ? "pointer-events-auto" : "pointer-events-none"}`} aria-hidden={!cartOpen}>
 //         <div onClick={() => setCartOpen(false)} className={`absolute inset-0 bg-black/40 transition-opacity ${cartOpen ? "opacity-100" : "opacity-0"}`} />
 //         <aside className={`absolute right-0 top-0 h-full w-full sm:w-[520px] md:w-[640px] lg:w-[720px] bg-white shadow-2xl transform transition-transform ${cartOpen ? "translate-x-0" : "translate-x-full"}`} role="dialog" aria-modal="true">
 //           <div className="p-6 h-full flex flex-col">
@@ -489,8 +516,16 @@
 //                 <div className="space-y-4">
 //                   {cartLines.map((ln) => (
 //                     <div key={String(ln.product.id)} className="flex items-center gap-4 p-3 border rounded-lg">
-//                       <div className="w-20 h-20 rounded overflow-hidden flex-shrink-0">
-//                         <img src={ln.product.image ?? ln.product.image_url} alt={ln.product.name} className="object-cover w-full h-full" />
+//                       <div className="w-20 h-20 rounded overflow-hidden flex-shrink-0 bg-slate-50">
+//                         <img
+//                           // Prefer image_url then image
+//                           src={ln.product.image_url ?? ln.product.image ?? fallbackFor(ln.product)}
+//                           alt={ln.product.name}
+//                           className="object-cover w-full h-full"
+//                           onError={(e) => {
+//                             (e.currentTarget as HTMLImageElement).src = fallbackFor(ln.product);
+//                           }}
+//                         />
 //                       </div>
 //                       <div className="flex-1">
 //                         <div className="flex items-start justify-between gap-2">
@@ -530,35 +565,53 @@
 //                 <div className="text-right font-medium">- ₹ {discountAmount.toFixed(2)}</div>
 //               </div>
 
-//               <div className="flex items-center gap-2 mb-4">
+//               {/* Discount controls + GST below them */}
+//               <div className="flex items-center gap-2 mb-3">
 //                 <select value={discount.type} onChange={(e) => setDiscount((d) => ({ ...d, type: e.target.value as "fixed" | "percent" }))} className="p-2 border rounded bg-slate-50">
 //                   <option value="fixed">Fixed</option>
 //                   <option value="percent">Percent</option>
 //                 </select>
 //                 <input type="number" min={0} value={discount.value} onChange={(e) => setDiscount((d) => ({ ...d, value: Number(e.target.value || 0) }))} className="p-2 border rounded w-36" placeholder={discount.type === "fixed" ? "₹ amount" : "%"} />
-//                 <div className="ml-auto flex items-center gap-2">
-//                   <div className="text-sm text-slate-600">GST %</div>
-//                   <select value={gstPercent} onChange={(e) => setGstPercent(Number(e.target.value))} className="p-2 border rounded bg-slate-50">
-//                     <option value={0}>0</option>
-//                     <option value={0.25}>0.25</option>
-//                     <option value={3}>3</option>
-//                     <option value={5}>5</option>
-//                     <option value={12}>12</option>
-//                     <option value={18}>18</option>
-//                     <option value={28}>28</option>
-//                   </select>
-//                 </div>
+//                 <div className="ml-auto text-sm text-slate-600">Adjust discount</div>
 //               </div>
 
+//               {/* GST dropdown moved here (below discount controls) */}
+//               <div className="mb-4 flex items-center gap-2">
+//                 <div className="text-sm text-slate-600">GST %</div>
+//                 <select value={gstPercent} onChange={(e) => setGstPercent(Number(e.target.value))} className="p-2 border rounded bg-slate-50">
+//                   <option value={0}>0</option>
+//                   <option value={0.25}>0.25</option>
+//                   <option value={3}>3</option>
+//                   <option value={5}>5</option>
+//                   <option value={12}>12</option>
+//                   <option value={18}>18</option>
+//                   <option value={28}>28</option>
+//                 </select>
+//                 <div className="ml-auto text-sm text-slate-500">Tax applied to subtotal</div>
+//               </div>
 //               <div className="flex items-center justify-between mb-4">
 //                 <div className="text-lg font-medium">Total</div>
 //                 <div className="text-2xl font-extrabold">₹ {total.toFixed(2)}</div>
 //               </div>
+//               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+//                 <div>
+//                   <label className="text-sm text-slate-600 block mb-1">Customer name</label>
+//                   <input value={customerName} onChange={(e) => setCustomerName(e.target.value)} placeholder="Customer name" className="w-full p-2 border rounded" />
+//                 </div>
+//                 <div>
+//                   <label className="text-sm text-slate-600 block mb-1">Phone number</label>
+//                   <input value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="10+ digits" className="w-full p-2 border rounded" inputMode="tel" />
+//                 </div>
+//               </div>
 
 //               <div className="flex gap-3">
-//                 <button onClick={() => { setCartMap({}); toast("Cart cleared", { icon: "🧹" }); }} className="px-4 py-2 border rounded">Clear Cart</button>
+//                 <button onClick={() => { setCartMap({}); setCustomerName(""); setCustomerPhone(""); toast("Cart cleared", { icon: "🧹" }); }} className="px-4 py-2 border rounded">Clear Cart</button>
 
-//                 <button onClick={() => void handleCheckout()} disabled={isCheckingOut || cartLines.length === 0} className="ml-auto px-6 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60">
+//                 <button
+//                   onClick={() => void handleCheckout()}
+//                   disabled={isCheckingOut || cartLines.length === 0 || !validName(customerName) || !validPhone(customerPhone)}
+//                   className="ml-auto px-6 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+//                 >
 //                   {isCheckingOut ? "Processing…" : `Purchase ₹ ${total.toFixed(2)}`}
 //                 </button>
 //               </div>
@@ -678,6 +731,10 @@ export default function POS(): JSX.Element {
   const [customerName, setCustomerName] = useState<string>("");
   const [customerPhone, setCustomerPhone] = useState<string>("");
 
+  // New: payment method (only allowed: "card" | "upi" | "cash")
+  type PaymentMethod = "card" | "upi" | "cash" | "";
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("");
+
   // Helper: normalize raw server product -> Product
   const normalizeServerProduct = (r: any, fallbackIndex = 0): Product => {
     return {
@@ -759,7 +816,6 @@ export default function POS(): JSX.Element {
       const nextQty = (m[key] ?? 0) + qty;
       return { ...m, [key]: nextQty };
     });
-    // DO NOT call setCartOpen(true) here — cart opens only when user clicks cart button
     toast.success(`${product.name} added to cart`);
   }
 
@@ -808,47 +864,52 @@ export default function POS(): JSX.Element {
   const validName = (n: string) => n.trim().length > 0;
 
   async function handleCheckout() {
-  if (cartLines.length === 0) { toast.error("Cart is empty"); return; }
-  if (!validName(customerName)) { toast.error("Enter customer name"); return; }
-  if (!validPhone(customerPhone)) { toast.error("Enter valid phone number (min 10 digits)"); return; }
+    if (cartLines.length === 0) { toast.error("Cart is empty"); return; }
+    if (!validName(customerName)) { toast.error("Enter customer name"); return; }
+    if (!validPhone(customerPhone)) { toast.error("Enter valid phone number (min 10 digits)"); return; }
+    if (!paymentMethod) { toast.error("Select payment method"); return; }
 
-  setIsCheckingOut(true);
+    setIsCheckingOut(true);
 
-  const payload = {
-    name: customerName.trim(),
-    phone: customerPhone.replace(/\D/g, ""),
-    items: cartLines.map(l => ({
-      product_id: typeof l.product.id === "string" && /^\d+$/.test(l.product.id) ? Number(l.product.id) : l.product.id,
-      name: l.product.name,
-      qty: l.qty,
-      price: l.product.price
-    })),
-    subtotal: subTotal,
-    gst_percent: gstPercent,
-    gst_amount: gstAmount,
-    discount_type: discount.type,    
-    discount_value: discount.value,  
-    total,
-  };
-  console.log("PAYLOAD",payload)  
-  try {
-    const res = await api.post("admin/pos-orders/create", payload, {
-      headers: { "Content-Type": "application/json" }
-    });
-    const body = res.data;
-    toast.success("Purchase successful");
-    setCartMap({});
-    setCartOpen(false);
-    setCustomerName("");
-    setCustomerPhone("");
-    if (body?.order_id) toast.success(`Order ${body.order_id} created`);
-  } catch (err: any) {
-    toast.error("Network/server error while creating order");
-  } finally {
-    setIsCheckingOut(false);
+    const payload = {
+      name: customerName.trim(),
+      phone: customerPhone.replace(/\D/g, ""),
+      payment: paymentMethod, // <-- included payment method (allowed: card|upi|cash)
+      items: cartLines.map(l => ({
+        product_id: typeof l.product.id === "string" && /^\d+$/.test(l.product.id) ? Number(l.product.id) : l.product.id,
+        name: l.product.name,
+        qty: l.qty,
+        price: l.product.price
+      })),
+      subtotal: subTotal,
+      gst_percent: gstPercent,
+      gst_amount: gstAmount,
+      discount_type: discount.type,
+      discount_value: discount.value,
+      total,
+    };
+    console.log("PAYLOAD", payload);
+    try {
+      const res = await api.post("admin/pos-orders/create", payload, {
+        headers: { "Content-Type": "application/json" }
+      });
+      const body = res.data;
+      toast.success("Purchase successful");
+      setCartMap({});
+      setCartOpen(false);
+      setCustomerName("");
+      setCustomerPhone("");
+      setPaymentMethod(""); // reset after successful purchase
+      if (body?.order_id) toast.success(`Order ${body.order_id} created`);
+    } catch (err: any) {
+      console.error("Checkout error", err);
+      toast.error("Network/server error while creating order");
+    } finally {
+      setIsCheckingOut(false);
+    }
   }
-}
-  // PRODUCTS CRUD via api instance
+
+  // PRODUCTS CRUD via api instance (unchanged)
   async function apiCreateProduct(name: string, price: number, file?: File | null) {
     const fd = new FormData();
     fd.append("name", name);
@@ -889,11 +950,10 @@ export default function POS(): JSX.Element {
 
   async function apiDeleteProduct(id: string | number) {
     const res = await api.delete(`/admin/products/delete/${id}`);
-    // Some backends return 204 with no body — treat as success
     return res.status >= 200 && res.status < 300;
   }
 
-  // Admin modal helpers
+  // Admin modal helpers (unchanged)
   function openAdminCreate() {
     setAdminEditProduct(null);
     setAdminName("");
@@ -953,7 +1013,6 @@ export default function POS(): JSX.Element {
     } catch (err: any) {
       console.error("Save product failed", err);
       toast.error(err?.message || "Save failed");
-      // Best-effort refresh
       try { await refreshProducts(); } catch {}
     } finally {
       setAdminImageFile(null);
@@ -1063,7 +1122,6 @@ export default function POS(): JSX.Element {
               ))
             : visibleProducts.map((p) => {
                 const inCartQty = cartMap[String(p.id)] ?? 0;
-                // prefer image_url then image
                 const imageSrc = p.image_url ?? p.image ?? fallbackFor(p);
                 return (
                   <div key={p.id} className="p-3 border rounded-lg flex flex-col">
@@ -1121,7 +1179,30 @@ export default function POS(): JSX.Element {
                 <div className="text-sm text-slate-500">{itemsCount} items</div>
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={() => { setCartMap({}); toast.success("Cart cleared"); }} className="px-3 py-2 border rounded text-sm">Clear</button>
+                {/* Replaced Clear Cart with Payment dropdown as requested */}
+                <div>
+                  <label className="text-xs text-slate-500 block mb-1">Payment</label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => {
+                      const val = e.target.value as PaymentMethod;
+                      // Ensure only allowed values accepted
+                      if (val === "card" || val === "upi" || val === "cash" || val === "") {
+                        setPaymentMethod(val);
+                      } else {
+                        setPaymentMethod("");
+                      }
+                    }}
+                    className="p-2 border rounded bg-white"
+                    aria-label="Select payment method"
+                  >
+                    <option value="">Select payment</option>
+                    <option value="card">Card</option>
+                    <option value="upi">UPI</option>
+                    <option value="cash">Cash</option>
+                  </select>
+                </div>
+
                 <button onClick={() => setCartOpen(false)} className="p-2 rounded hover:bg-slate-100"><X /></button>
               </div>
             </div>
@@ -1142,7 +1223,6 @@ export default function POS(): JSX.Element {
                     <div key={String(ln.product.id)} className="flex items-center gap-4 p-3 border rounded-lg">
                       <div className="w-20 h-20 rounded overflow-hidden flex-shrink-0 bg-slate-50">
                         <img
-                          // Prefer image_url then image
                           src={ln.product.image_url ?? ln.product.image ?? fallbackFor(ln.product)}
                           alt={ln.product.name}
                           className="object-cover w-full h-full"
@@ -1229,18 +1309,21 @@ export default function POS(): JSX.Element {
               </div>
 
               <div className="flex gap-3">
-                <button onClick={() => { setCartMap({}); setCustomerName(""); setCustomerPhone(""); toast("Cart cleared", { icon: "🧹" }); }} className="px-4 py-2 border rounded">Clear Cart</button>
-
+                {/* If you still want a visible clear cart, we can keep it as a small icon. For now, per your request, Clear Cart button is replaced by Payment dropdown above. */}
                 <button
                   onClick={() => void handleCheckout()}
-                  disabled={isCheckingOut || cartLines.length === 0 || !validName(customerName) || !validPhone(customerPhone)}
+                  disabled={
+                    isCheckingOut ||
+                    cartLines.length === 0 ||
+                    !validName(customerName) ||
+                    !validPhone(customerPhone) ||
+                    !paymentMethod // ensure payment selected
+                  }
                   className="ml-auto px-6 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
                 >
                   {isCheckingOut ? "Processing…" : `Purchase ₹ ${total.toFixed(2)}`}
                 </button>
               </div>
-
-              <div className="text-xs text-slate-400 mt-3">This is a demo checkout — the component will attempt to POST to <code className="bg-slate-100 px-1 rounded">/orders</code> via your axios instance.</div>
             </div>
           </div>
         </aside>
@@ -1299,5 +1382,4 @@ export default function POS(): JSX.Element {
     </div>
   );
 }
-
 

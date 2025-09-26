@@ -1,138 +1,774 @@
-import React, { useMemo, useState } from "react";
+// import React, { useEffect, useMemo, useState } from "react";
+// import toast, { Toaster } from "react-hot-toast";
+// import api from "../../src/api/axios";
+
+// type PurchaseItem = {
+//   sku: string;
+//   name: string;
+//   qty: number;
+//   unitPrice: number;
+// };
+
+// type Purchase = {
+//   id: string;
+//   invoiceNo: string;
+//   rawDate: string | null;
+//   displayDate: string;
+//   customer: string;
+//   phone: string;
+//   items: PurchaseItem[];
+//   paymentMethod: string;
+//   subtotal?: number;
+//   discount_value?: number;
+//   gst_amount?: number;
+//   total: number;
+// };
+
+// function formatCurrency(n: number) {
+//   return `₹ ${n.toFixed(2)}`;
+// }
+
+// /** Map single API order -> Purchase */
+// function mapApiOrder(order: any): Purchase {
+//   const rawDate = order.order_time ?? order.created_at ?? order.date ?? null;
+//   const displayDate =
+//     order.order_time_formatted ?? (rawDate ? new Date(rawDate).toLocaleString() : "");
+
+//   const items: PurchaseItem[] = Array.isArray(order.items)
+//     ? order.items.map((it: any) => ({
+//         sku: String(it.product_id ?? it.sku ?? ""),
+//         name: String(it.name ?? it.title ?? "Item"),
+//         qty: Number(it.qty ?? it.quantity ?? 1),
+//         unitPrice: Number(it.price ?? it.unit_price ?? 0),
+//       }))
+//     : [];
+
+//   const subtotal =
+//     typeof order.subtotal === "string"
+//       ? Number(order.subtotal)
+//       : typeof order.subtotal === "number"
+//       ? order.subtotal
+//       : undefined;
+//   const discount_value =
+//     typeof order.discount_value === "string"
+//       ? Number(order.discount_value)
+//       : typeof order.discount_value === "number"
+//       ? order.discount_value
+//       : undefined;
+//   const gst_amount =
+//     typeof order.gst_amount === "string"
+//       ? Number(order.gst_amount)
+//       : typeof order.gst_amount === "number"
+//       ? order.gst_amount
+//       : undefined;
+//   const total =
+//     typeof order.total === "string"
+//       ? Number(order.total)
+//       : typeof order.total === "number"
+//       ? order.total
+//       : items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+
+//   return {
+//     id: String(order.id ?? order.order_id ?? ""),
+//     invoiceNo: String(order.id ?? order.order_id ?? ""),
+//     rawDate,
+//     displayDate,
+//     customer: String(order.customer_name ?? order.customer ?? "Walk-in"),
+//     phone: String(order.customer_phone ?? order.phone ?? "-"),
+//     items,
+//     paymentMethod: String(order.payment ?? order.payment_method ?? "-"),
+//     subtotal,
+//     discount_value,
+//     gst_amount,
+//     total,
+//   };
+// }
+
+// export default function POSPurchases(): JSX.Element {
+//   const [from, setFrom] = useState<string>("");
+//   const [to, setTo] = useState<string>("");
+//   const [q, setQ] = useState<string>(""); 
+//   const [drawerPurchase, setDrawerPurchase] = useState<Purchase | null>(null);
+//   const [loading, setLoading] = useState(false);
+//   const [initialLoading, setInitialLoading] = useState(true); // for full-screen initial loader
+//   const [purchases, setPurchases] = useState<Purchase[]>([]);
+
+//   // If backend returns totals object, store it to show exact backend totals
+//   const [backendTotals, setBackendTotals] = useState<{
+//     subtotal?: number;
+//     discount?: number;
+//     gst?: number;
+//     grand_total?: number;
+//     transactions?: number;
+//   } | null>(null);
+
+//   // Load purchases (server-side). Accepts optional params (q, from, to).
+//   async function loadPurchases(params?: { q?: string; from?: string; to?: string }) {
+//     // show inline loader for non-initial loads; keep initialLoading separate
+//     if (!initialLoading) setLoading(true);
+//     try {
+//       // Build query params (only non-empty)
+//       const queryParams: Record<string, string> = {};
+//       if (params?.q) queryParams.q = params.q;
+//       if (params?.from) queryParams.from = params.from;
+//       if (params?.to) queryParams.to = params.to;
+
+//       const res = await api.get("/admin/pos-orders/orders", { params: queryParams });
+//       const body = res.data;
+//         console.log("BODY", body)
+//       // Reset backendTotals then set if provided
+//       setBackendTotals(body?.totals ?? null);
+
+//       const mapped: Purchase[] = [];
+
+//       // The API in your example returns { status: true, data: [...] , totals: {...} }
+//       if (Array.isArray(body?.data)) {
+//         mapped.push(...body.data.map(mapApiOrder));
+//       } else if (Array.isArray(body?.orders)) {
+//         mapped.push(...body.orders.map(mapApiOrder));
+//       } else if (Array.isArray(body)) {
+//         mapped.push(...body.map(mapApiOrder));
+//       } else if (body?.order) {
+//         mapped.push(mapApiOrder(body.order));
+//       } else {
+//         // Try mapping top-level if it looks like an order
+//         const maybe = mapApiOrder(body);
+//         if (maybe && (maybe.id || maybe.customer)) mapped.push(maybe);
+//       }
+
+//       // Sort newest first
+//       mapped.sort((a, b) => {
+//         const aTs = a.rawDate ? new Date(a.rawDate).getTime() : new Date(a.displayDate).getTime();
+//         const bTs = b.rawDate ? new Date(b.rawDate).getTime() : new Date(b.displayDate).getTime();
+//         return bTs - aTs;
+//       });
+
+//       setPurchases(mapped);
+//     } catch (err: any) {
+//       console.error("loadPurchases error:", err);
+//       toast.error("Failed to fetch purchases from API");
+//       setPurchases([]);
+//       setBackendTotals(null);
+//     } finally {
+//       setLoading(false);
+//       setInitialLoading(false);
+//     }
+//   }
+
+//   // initial load
+//   useEffect(() => {
+//     void loadPurchases();
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//   }, []);
+
+//   // When user changes FROM or TO date we immediately call the API with those params
+//   function onChangeFrom(v: string) {
+//     setFrom(v);
+//     void loadPurchases({ q: q || undefined, from: v || undefined, to: to || undefined });
+//   }
+//   function onChangeTo(v: string) {
+//     setTo(v);
+//     void loadPurchases({ q: q || undefined, from: from || undefined, to: v || undefined });
+//   }
+
+//   // client-side safety filter (retains design/behaviour)
+//   const visible = useMemo(() => {
+//     const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
+//     const toTs = to ? new Date(to + "T23:59:59").getTime() : null;
+//     const qq = q.trim().toLowerCase();
+
+//     return purchases.filter((p) => {
+//       const dateToCheck = p.rawDate ? new Date(p.rawDate).getTime() : (p.displayDate ? new Date(p.displayDate).getTime() : NaN);
+//       if (fromTs != null && !isNaN(dateToCheck) && dateToCheck < fromTs) return false;
+//       if (toTs != null && !isNaN(dateToCheck) && dateToCheck > toTs) return false;
+//       if (!qq) return true;
+//       if ((p.id || "").toLowerCase().includes(qq)) return true; // invoice id search
+//       if ((p.customer || "").toLowerCase().includes(qq)) return true;
+//       if ((p.phone || "").toLowerCase().includes(qq)) return true;
+//       if ((p.paymentMethod || "").toLowerCase().includes(qq)) return true;
+//       if (p.items.some((it) => `${it.name} ${it.sku}`.toLowerCase().includes(qq))) return true;
+//       return false;
+//     });
+//   }, [from, to, q, purchases]);
+
+//   // totals: prefer backend totals (if present) else compute client-side from visible
+//   const totals = useMemo(() => {
+//     if (backendTotals) {
+//       return {
+//         subtotal: Number(backendTotals.subtotal ?? 0),
+//         discount: Number(backendTotals.discount ?? 0),
+//         gst: Number(backendTotals.gst ?? 0),
+//         grand: Number(backendTotals.grand_total ?? backendTotals.grand_total ?? 0),
+//         transactions: Number(backendTotals.transactions ?? visible.length),
+//       };
+//     }
+
+//     let subtotalSum = 0;
+//     let discountSum = 0;
+//     let gstSum = 0;
+//     let grandSum = 0;
+
+//     for (const p of visible) {
+//       const pSubtotal = typeof p.subtotal === "number"
+//         ? p.subtotal
+//         : p.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+//       subtotalSum += pSubtotal;
+//       discountSum += p.discount_value ?? 0;
+//       gstSum += p.gst_amount ?? 0;
+//       grandSum += p.total ?? 0;
+//     }
+
+//     const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+//     return {
+//       subtotal: round(subtotalSum),
+//       discount: round(discountSum),
+//       gst: round(gstSum),
+//       grand: round(grandSum),
+//       transactions: visible.length,
+//     };
+//   }, [visible, backendTotals]);
+
+//   // search button triggers server-side search as well
+//   async function handleSearch() {
+//     await loadPurchases({ q: q || undefined, from: from || undefined, to: to || undefined });
+//   }
+
+//   function handleReset() {
+//     setFrom("");
+//     setTo("");
+//     setQ("");
+//     void loadPurchases();
+//   }
+
+//   function exportCsv() {
+//     if (!visible.length) {
+//       toast.error("No purchases to export");
+//       return;
+//     }
+//     const rows: string[][] = [
+//       ["Invoice", "Date", "Customer", "Phone", "Payment", "Item SKU", "Item Name", "Qty", "Unit Price", "Line Total", "Order Subtotal", "Order Discount", "Order GST", "Order Total"]
+//     ];
+//     visible.forEach((p) => {
+//       p.items.forEach((it) => {
+//         rows.push([
+//           `INV-${p.id}`,
+//           p.displayDate,
+//           p.customer,
+//           p.phone,
+//           p.paymentMethod,
+//           it.sku,
+//           it.name,
+//           String(it.qty),
+//           String(it.unitPrice.toFixed(2)),
+//           String((it.unitPrice * it.qty).toFixed(2)),
+//           p.subtotal != null ? String(Number(p.subtotal).toFixed(2)) : "",
+//           p.discount_value != null ? String(Number(p.discount_value).toFixed(2)) : "",
+//           p.gst_amount != null ? String(Number(p.gst_amount).toFixed(2)) : "",
+//           p.total != null ? String(Number(p.total).toFixed(2)) : "",
+//         ]);
+//       });
+//     });
+//     const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
+//     const blob = new Blob([csv], { type: "text/csv" });
+//     const url = URL.createObjectURL(blob);
+//     const a = document.createElement("a");
+//     a.href = url;
+//     a.download = `purchases_${from || "all"}_${to || "all"}.csv`;
+//     a.click();
+//     URL.revokeObjectURL(url);
+//     toast.success("CSV exported");
+//   }
+
+//   // small spinner component (Tailwind-friendly)
+//   const Spinner = ({ size = 5 }: { size?: number }) => (
+//     <div className={`inline-block border-${size} w-${size} h-${size} rounded-full border-t-[3px] border-slate-300 border-t-indigo-600 animate-spin`} style={{ width: `${size * 6}px`, height: `${size * 6}px`, borderWidth: "3px" }} />
+//   );
+
+//   // Skeleton row for table
+//   const TableSkeletonRow = ({ keyIndex = 0 }: { keyIndex?: number }) => (
+//     <tr key={"skeleton-" + keyIndex} className="border-b">
+//       <td className="p-3">
+//         <div className="h-4 w-4 bg-slate-200 rounded animate-pulse" />
+//       </td>
+//       <td className="p-3">
+//         <div className="h-4 w-28 bg-slate-200 rounded animate-pulse" />
+//         <div className="h-3 w-16 bg-slate-100 rounded mt-2 animate-pulse" />
+//       </td>
+//       <td className="p-3">
+//         <div className="h-4 w-36 bg-slate-200 rounded animate-pulse" />
+//       </td>
+//       <td className="p-3">
+//         <div className="h-4 w-24 bg-slate-200 rounded animate-pulse" />
+//       </td>
+//       <td className="p-3">
+//         <div className="h-4 w-24 bg-slate-200 rounded animate-pulse" />
+//       </td>
+//       <td className="p-3">
+//         <div className="h-4 w-20 bg-slate-200 rounded animate-pulse" />
+//       </td>
+//       <td className="p-3">
+//         <div className="h-4 w-56 bg-slate-200 rounded animate-pulse" />
+//       </td>
+//       <td className="p-3 text-right">
+//         <div className="h-4 w-20 bg-slate-200 rounded ml-auto animate-pulse" />
+//       </td>
+//     </tr>
+//   );
+
+//   return (
+//     <div className="min-h-screen bg-gray-50 p-6">
+//       <Toaster position="top-right" />
+
+//       {/* Full-screen initial loader overlay */}
+//       {initialLoading && (
+//         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20">
+//           <div className="bg-white rounded-lg p-6 shadow-lg flex items-center gap-4">
+//             <div className="w-8 h-8 border-4 border-slate-200 border-t-indigo-600 rounded-full animate-spin" />
+//             <div className="text-slate-700">Loading purchases…</div>
+//           </div>
+//         </div>
+//       )}
+
+//       {/* Header + filters */}
+//       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+//         <div>
+//           <h1 className="text-2xl font-bold text-slate-900">POS — Purchases / Transactions</h1>
+//         </div>
+
+//         <div className="flex gap-2 w-full md:w-auto items-center">
+//           <div className="flex items-center gap-2">
+//             <label className="text-sm text-slate-600">From</label>
+//             <input type="date" value={from} onChange={(e) => onChangeFrom(e.target.value)} className="p-2 border rounded" />
+//           </div>
+
+//           <div className="flex items-center gap-2">
+//             <label className="text-sm text-slate-600">To</label>
+//             <input type="date" value={to} onChange={(e) => onChangeTo(e.target.value)} className="p-2 border rounded" />
+//           </div>
+
+//           <input
+//             placeholder="Search invoice / customer / item..."
+//             value={q}
+//             onChange={(e) => setQ(e.target.value)}
+//             className="p-2 border rounded w-80"
+//           />
+
+//           <button onClick={handleSearch} className="px-4 py-2 rounded bg-indigo-600 text-white">Search</button>
+//           {/* <button onClick={handleReset} className="px-3 py-2 rounded border">Reset</button> */}
+
+//           <button onClick={exportCsv} className="ml-4 px-2 py-2 rounded bg-emerald-600 text-white flex items-center gap-2">
+//             Export <span>CSV</span>
+//             {/* small spinner beside export when loading */}
+//             {loading && <div className="w-4 h-4 border-2 border-slate-200 border-t-white rounded-full animate-spin" />}
+//           </button>
+//         </div>
+//       </div>
+
+//       {/* Table (kept same layout) */}
+//       <div className="bg-white rounded-lg shadow-sm overflow-x-auto">
+//         <table className="w-full table-auto min-w-[900px]">
+//           <thead className="bg-slate-50">
+//             <tr>
+//               <th className="p-3 text-left">#</th>
+//               <th className="p-3 text-left">Invoice</th>
+//               <th className="p-3 text-left">Date</th>
+//               <th className="p3 text-left">Customer</th>
+//               <th className="p-3 text-left">Phone</th>
+//               <th className="p-3 text-left">Payment</th>
+//               <th className="p-3 text-left">Items</th>
+//               <th className="p-3 text-right">Total</th>
+//             </tr>
+//           </thead>
+
+//           <tbody>
+//             {/* show skeleton rows while loading */}
+//             {loading && initialLoading === false && (
+//               <>
+//                 <TableSkeletonRow keyIndex={1} />
+//                 <TableSkeletonRow keyIndex={2} />
+//                 <TableSkeletonRow keyIndex={3} />
+//               </>
+//             )}
+
+//             {!loading && visible.map((p, idx) => (
+//               <tr
+//                 key={p.id + "-" + idx}
+//                 className="border-b hover:bg-slate-50 cursor-pointer"
+//                 onClick={() => setDrawerPurchase(p)}
+//               >
+//                 <td className="p-3">{idx + 1}</td>
+//                 <td className="p-3">
+//                   <div className="font-medium">{p.id}</div>
+//                 </td>
+//                 <td className="p-3">{p.displayDate}</td>
+//                 <td className="p-3">{p.customer}</td>
+//                 <td className="p-3">{p.phone}</td>
+//                 <td className="p-3">{p.paymentMethod}</td>
+//                 <td className="p-3">
+//                   <div className="space-y-1 text-sm">
+//                     {p.items.map((it) => (
+//                       <div key={it.sku} className="flex items-center gap-3">
+//                         <div className="font-medium">{it.name}</div>
+//                         {/* <div className="text-xs text-slate-500">• {it.qty} × {it.unitPrice}</div> */}
+//                       </div>
+//                     ))}
+//                   </div>
+//                 </td>
+//                 <td className="p-3 text-right font-semibold">{formatCurrency(p.total)}</td>
+//               </tr>
+//             ))}
+
+//             {/* if not loading and no results */}
+//             {!loading && !visible.length && (
+//               <tr>
+//                 <td colSpan={8} className="p-6 text-center text-slate-500">No purchases found</td>
+//               </tr>
+//             )}
+//           </tbody>
+//         </table>
+
+//         {/* totals footer styled like your screenshot */}
+//         <div className="p-6 border-t bg-white">
+//           <div className="max-w-[900px] ml-auto">
+//             <div className="w-1/3 ml-auto">
+//               <div className="flex justify-between py-1 text-sm">
+//                 <div className="text-sm text-slate-600">Subtotal</div>
+//                 <div className="font-medium">{formatCurrency(totals.subtotal)}</div>
+//               </div>
+
+//               <div className="flex justify-between py-1 text-sm">
+//                 <div className="text-sm text-slate-600">Total Discount</div>
+//                 <div className="font-medium">-{formatCurrency(totals.discount)}</div>
+//               </div>
+
+//               <div className="flex justify-between py-1 text-sm">
+//                 <div className="text-sm text-slate-600">Total GST</div>
+//                 <div className="font-medium">{formatCurrency(totals.gst)}</div>
+//               </div>
+
+//               <div className="flex justify-between pt-4 border-t text-lg font-bold">
+//                 <div>Grand Total</div>
+//                 <div>{formatCurrency(totals.grand)}</div>
+//               </div>
+//             </div>
+//           </div>
+//         </div>
+
+//         {/* small inline loading indicator */}
+//         {loading && initialLoading === false && (
+//           <div className="p-4 text-center text-slate-500">Loading…</div>
+//         )}
+//       </div>
+
+//       {/* {drawerPurchase && (
+//         <div className="fixed inset-0 z-50 flex">
+//           <div className="absolute inset-0 bg-black/30" onClick={() => setDrawerPurchase(null)} />
+//           <aside className="ml-auto w-full sm:w-[560px] bg-white h-full shadow-2xl overflow-auto p-6">
+//             <div className="flex items-start justify-between mb-4">
+//               <div>
+//                 <h2 className="text-xl font-semibold">Invoice: {drawerPurchase.id}</h2>
+//                 <div className="text-sm text-slate-500">{drawerPurchase.customer} • {drawerPurchase.phone}</div>
+//                 <div className="text-xs text-slate-400 mt-1">{drawerPurchase.displayDate}</div>
+//               </div>
+//               <div>
+//                 <button onClick={() => setDrawerPurchase(null)} className="px-3 py-2 rounded bg-slate-100">Close</button>
+//               </div>
+//             </div>
+
+//             <div className="mb-4">
+//               <table className="w-full text-left table-auto">
+//                 <thead className="bg-slate-50">
+//                   <tr>
+//                     <th className="p-2 text-left">SKU</th>
+//                     <th className="p-2 text-left">Item</th>
+//                     <th className="p-2 text-right">Qty</th>
+//                     <th className="p-2 text-right">Unit Price</th>
+//                     <th className="p-2 text-right">Line Total</th>
+//                   </tr>
+//                 </thead>
+
+//                 <tbody>
+//                   {drawerPurchase.items.map((it) => {
+//                     const lineTotal = it.unitPrice * it.qty;
+//                     return (
+//                       <tr key={it.sku} className="border-b">
+//                         <td className="p-2">{it.sku}</td>
+//                         <td className="p-2">{it.name}</td>
+//                         <td className="p-2 text-right">{it.qty}</td>
+//                         <td className="p-2 text-right">{formatCurrency(it.unitPrice)}</td>
+//                         <td className="p-2 text-right font-semibold">{formatCurrency(lineTotal)}</td>
+//                       </tr>
+//                     );
+//                   })}
+//                 </tbody>
+//               </table>
+//             </div>
+
+//             <div className="mt-4 space-y-2">
+//               <div className="flex justify-between">
+//                 <div className="text-sm text-slate-600">Subtotal</div>
+//                 <div className="font-medium">{formatCurrency(drawerPurchase.subtotal ?? drawerPurchase.items.reduce((s, it) => s + it.unitPrice * it.qty, 0))}</div>
+//               </div>
+
+//               <div className="flex justify-between">
+//                 <div className="text-sm text-slate-600">Total Discount</div>
+//                 <div className="font-medium">-{formatCurrency(drawerPurchase.discount_value ?? 0)}</div>
+//               </div>
+
+//               <div className="flex justify-between">
+//                 <div className="text-sm text-slate-600">Total GST</div>
+//                 <div className="font-medium">{formatCurrency(drawerPurchase.gst_amount ?? 0)}</div>
+//               </div>
+
+//               <div className="flex justify-between pt-2 border-t text-lg font-bold">
+//                 <div>Grand Total</div>
+//                 <div>{formatCurrency(drawerPurchase.total)}</div>
+//               </div>
+
+//               <div className="flex gap-2 mt-4">
+//                 <button className="px-4 py-2 rounded bg-indigo-600 text-white">Make Payment</button>
+//                 <button className="px-4 py-2 rounded border">Print Invoice</button>
+//                 <button className="px-4 py-2 rounded bg-rose-500 text-white">Refund</button>
+//               </div>
+//             </div>
+//           </aside>
+//         </div>
+//       )} */}
+//     </div>
+//   );
+// }
+import React, { useEffect, useMemo, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
+import api from "../../src/api/axios";
 
 type PurchaseItem = {
   sku: string;
   name: string;
   qty: number;
-  unit: string;
-  unitPrice: number; // price per unit before discount & tax
-  discountPerUnit?: number; // discount amount per unit
-  gstPercent?: number; // e.g. 5 or 18
+  unitPrice: number;
 };
 
 type Purchase = {
   id: string;
   invoiceNo: string;
-  date: string; // ISO date string
-  customer?: string;
+  rawDate: string | null;
+  displayDate: string;
+  customer: string;
+  phone: string;
   items: PurchaseItem[];
-  paymentMethod?: string;
-  note?: string;
+  paymentMethod: string;
+  subtotal?: number;
+  discount_value?: number;
+  gst_amount?: number;
+  total: number;
 };
-
-const SAMPLE_PURCHASES: Purchase[] = [
-  {
-    id: "T-1001",
-    invoiceNo: "INV-1001",
-    date: "2025-09-10T11:15:00.000Z",
-    customer: "Retail - Walkin",
-    paymentMethod: "Cash",
-    items: [
-      { sku: "MIR-500", name: "MILLET IDLY RAVVAS", qty: 2, unit: "500g", unitPrice: 120, discountPerUnit: 5, gstPercent: 5 },
-      { sku: "GRA-1KG", name: "GRAINS", qty: 1, unit: "1kg", unitPrice: 240, gstPercent: 5 },
-    ],
-  },
-  {
-    id: "T-1002",
-    invoiceNo: "INV-1002",
-    date: "2025-09-10T14:40:00.000Z",
-    customer: "Kirana - Sharma",
-    paymentMethod: "UPI",
-    items: [
-      { sku: "MUR-500", name: "MILLET UPMA RAVVA", qty: 3, unit: "500g", unitPrice: 95, discountPerUnit: 0, gstPercent: 5 },
-      { sku: "SNK-250", name: "Healthy Snack Mix", qty: 2, unit: "250g", unitPrice: 150, gstPercent: 12 },
-    ],
-  },
-  {
-    id: "T-1003",
-    invoiceNo: "INV-1003",
-    date: "2025-09-11T09:20:00.000Z",
-    customer: "Retail - Walkin",
-    paymentMethod: "Card",
-    items: [
-      { sku: "SDF-500", name: "SPECIAL DRY FRUITS", qty: 1, unit: "500g", unitPrice: 480, discountPerUnit: 20, gstPercent: 12 },
-      { sku: "FLO-2KG", name: "FLOUR", qty: 2, unit: "2kg", unitPrice: 180, gstPercent: 5 },
-    ],
-  },
-  {
-    id: "T-1004",
-    invoiceNo: "INV-1004",
-    date: "2025-09-12T12:00:00.000Z",
-    customer: "Wholesale - Annapurna",
-    paymentMethod: "Credit",
-    items: [
-      { sku: "GRA-1KG", name: "GRAINS", qty: 10, unit: "1kg", unitPrice: 240, discountPerUnit: 10, gstPercent: 5 },
-    ],
-  },
-  {
-    id: "T-1005",
-    invoiceNo: "INV-1005",
-    date: "2025-09-12T16:45:00.000Z",
-    customer: "Retail - Walkin",
-    paymentMethod: "Cash",
-    items: [
-      { sku: "MIR-500", name: "MILLET IDLY RAVVAS", qty: 1, unit: "500g", unitPrice: 120, gstPercent: 5 },
-      { sku: "FLO-2KG", name: "FLOUR", qty: 1, unit: "2kg", unitPrice: 180, discountPerUnit: 10, gstPercent: 5 },
-    ],
-  },
-];
 
 function formatCurrency(n: number) {
   return `₹ ${n.toFixed(2)}`;
 }
 
-export default function POSPurchases(): JSX.Element {
-  // filters & UI
-  const [from, setFrom] = useState<string>("2025-09-10");
-  const [to, setTo] = useState<string>("2025-09-12");
-  const [q, setQ] = useState<string>("");
-  const [drawerPurchase, setDrawerPurchase] = useState<Purchase | null>(null);
+/** Map single API order -> Purchase */
+function mapApiOrder(order: any): Purchase {
+  const rawDate = order.order_time ?? order.created_at ?? order.date ?? null;
+  const displayDate =
+    order.order_time_formatted ?? (rawDate ? new Date(rawDate).toLocaleString() : "");
 
-  // filter purchases by date range and search
+  const items: PurchaseItem[] = Array.isArray(order.items)
+    ? order.items.map((it: any) => ({
+        sku: String(it.product_id ?? it.sku ?? ""),
+        name: String(it.name ?? it.title ?? "Item"),
+        qty: Number(it.qty ?? it.quantity ?? 1),
+        unitPrice: Number(it.price ?? it.unit_price ?? 0),
+      }))
+    : [];
+
+  const subtotal =
+    typeof order.subtotal === "string"
+      ? Number(order.subtotal)
+      : typeof order.subtotal === "number"
+      ? order.subtotal
+      : undefined;
+  const discount_value =
+    typeof order.discount_value === "string"
+      ? Number(order.discount_value)
+      : typeof order.discount_value === "number"
+      ? order.discount_value
+      : undefined;
+  const gst_amount =
+    typeof order.gst_amount === "string"
+      ? Number(order.gst_amount)
+      : typeof order.gst_amount === "number"
+      ? order.gst_amount
+      : undefined;
+  const total =
+    typeof order.total === "string"
+      ? Number(order.total)
+      : typeof order.total === "number"
+      ? order.total
+      : items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+
+  return {
+    id: String(order.id ?? order.order_id ?? ""),
+    invoiceNo: String(order.id ?? order.order_id ?? ""),
+    rawDate,
+    displayDate,
+    customer: String(order.customer_name ?? order.customer ?? "Walk-in"),
+    phone: String(order.customer_phone ?? order.phone ?? "-"),
+    items,
+    paymentMethod: String(order.payment ?? order.payment_method ?? "-"),
+    subtotal,
+    discount_value,
+    gst_amount,
+    total,
+  };
+}
+
+export default function POSPurchases(): JSX.Element {
+  const [from, setFrom] = useState<string>("");
+  const [to, setTo] = useState<string>("");
+  const [q, setQ] = useState<string>(""); 
+  const [drawerPurchase, setDrawerPurchase] = useState<Purchase | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true); 
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+
+  // If backend returns totals object, store it
+  const [backendTotals, setBackendTotals] = useState<{
+    subtotal?: number;
+    discount?: number;
+    gst?: number;
+    grand_total?: number;
+    transactions?: number;
+  } | null>(null);
+
+  // Load purchases
+  async function loadPurchases(params?: { q?: string; from?: string; to?: string }) {
+    if (!initialLoading) setLoading(true);
+    try {
+      const queryParams: Record<string, string> = {};
+      if (params?.q) queryParams.search = params.q; // backend expects `search`
+      if (params?.from) queryParams.from = params.from;
+      if (params?.to) queryParams.to = params.to;
+
+      const res = await api.get("/admin/pos-orders/orders", { params: queryParams });
+      const body = res.data;
+      setBackendTotals(body?.totals ?? null);
+      const mapped: Purchase[] = [];
+      if (Array.isArray(body?.data)) {
+        mapped.push(...body.data.map(mapApiOrder));
+      } else if (Array.isArray(body?.orders)) {
+        mapped.push(...body.orders.map(mapApiOrder));
+      } else if (Array.isArray(body)) {
+        mapped.push(...body.map(mapApiOrder));
+      } else if (body?.order) {
+        mapped.push(mapApiOrder(body.order));
+      } else {
+        const maybe = mapApiOrder(body);
+        if (maybe && (maybe.id || maybe.customer)) mapped.push(maybe);
+      }
+
+      mapped.sort((a, b) => {
+        const aTs = a.rawDate ? new Date(a.rawDate).getTime() : new Date(a.displayDate).getTime();
+        const bTs = b.rawDate ? new Date(b.rawDate).getTime() : new Date(b.displayDate).getTime();
+        return bTs - aTs;
+      });
+
+      setPurchases(mapped);
+    } catch (err: any) {
+      console.error("loadPurchases error:", err);
+      toast.error("Failed to fetch purchases from API");
+      setPurchases([]);
+      setBackendTotals(null);
+    } finally {
+      setLoading(false);
+      setInitialLoading(false);
+    }
+  }
+
+  // initial load
+  useEffect(() => {
+    void loadPurchases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // when user changes FROM/TO we immediately call API
+  function onChangeFrom(v: string) {
+    setFrom(v);
+    void loadPurchases({ q: q || undefined, from: v || undefined, to: to || undefined });
+  }
+  function onChangeTo(v: string) {
+    setTo(v);
+    void loadPurchases({ q: q || undefined, from: from || undefined, to: v || undefined });
+  }
+
+  // client-side safety filter
   const visible = useMemo(() => {
-    const fromTs = new Date(from + "T00:00:00").getTime();
-    const toTs = new Date(to + "T23:59:59").getTime();
+    const fromTs = from ? new Date(from + "T00:00:00").getTime() : null;
+    const toTs = to ? new Date(to + "T23:59:59").getTime() : null;
     const qq = q.trim().toLowerCase();
 
-    return SAMPLE_PURCHASES.filter((p) => {
-      const t = new Date(p.date).getTime();
-      if (isNaN(fromTs) || isNaN(toTs)) return true;
-      if (t < fromTs || t > toTs) return false;
+    return purchases.filter((p) => {
+      const dateToCheck = p.rawDate ? new Date(p.rawDate).getTime() : (p.displayDate ? new Date(p.displayDate).getTime() : NaN);
+      if (fromTs != null && !isNaN(dateToCheck) && dateToCheck < fromTs) return false;
+      if (toTs != null && !isNaN(dateToCheck) && dateToCheck > toTs) return false;
       if (!qq) return true;
-      // search in invoice, customer, item names and skus
-      if (p.invoiceNo.toLowerCase().includes(qq)) return true;
+      if ((p.id || "").toLowerCase().includes(qq)) return true;
       if ((p.customer || "").toLowerCase().includes(qq)) return true;
+      if ((p.phone || "").toLowerCase().includes(qq)) return true;
       if ((p.paymentMethod || "").toLowerCase().includes(qq)) return true;
       if (p.items.some((it) => `${it.name} ${it.sku}`.toLowerCase().includes(qq))) return true;
       return false;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [from, to, q]);
+    });
+  }, [from, to, q, purchases]);
 
-  // compute totals for visible rows
+  // totals
   const totals = useMemo(() => {
-    let subtotal = 0;
-    let totalDiscount = 0;
-    let totalGst = 0;
-    let grandTotal = 0;
-
-    for (const p of visible) {
-      for (const it of p.items) {
-        const priceBeforeDiscount = it.unitPrice * it.qty;
-        const discount = (it.discountPerUnit || 0) * it.qty;
-        const taxable = priceBeforeDiscount - discount;
-        const gst = taxable * ((it.gstPercent || 0) / 100);
-        const lineTotal = taxable + gst;
-
-        subtotal += priceBeforeDiscount;
-        totalDiscount += discount;
-        totalGst += gst;
-        grandTotal += lineTotal;
-      }
+    if (backendTotals) {
+      return {
+        subtotal: Number(backendTotals.subtotal ?? 0),
+        discount: Number(backendTotals.discount ?? 0),
+        gst: Number(backendTotals.gst ?? 0),
+        grand: Number(backendTotals.grand_total ?? backendTotals.grand_total ?? 0),
+        transactions: Number(backendTotals.transactions ?? visible.length),
+      };
     }
 
-    return { subtotal, totalDiscount, totalGst, grandTotal };
-  }, [visible]);
+    let subtotalSum = 0;
+    let discountSum = 0;
+    let gstSum = 0;
+    let grandSum = 0;
+
+    for (const p of visible) {
+      const pSubtotal = typeof p.subtotal === "number"
+        ? p.subtotal
+        : p.items.reduce((s, it) => s + it.unitPrice * it.qty, 0);
+      subtotalSum += pSubtotal;
+      discountSum += p.discount_value ?? 0;
+      gstSum += p.gst_amount ?? 0;
+      grandSum += p.total ?? 0;
+    }
+
+    const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+    return {
+      subtotal: round(subtotalSum),
+      discount: round(discountSum),
+      gst: round(gstSum),
+      grand: round(grandSum),
+      transactions: visible.length,
+    };
+  }, [visible, backendTotals]);
+
+  // search triggers server-side
+  async function handleSearch() {
+    await loadPurchases({ q: q || undefined, from: from || undefined, to: to || undefined });
+  }
+
+  function handleReset() {
+    setFrom("");
+    setTo("");
+    setQ("");
+    void loadPurchases();
+  }
 
   function exportCsv() {
     if (!visible.length) {
@@ -140,51 +776,29 @@ export default function POSPurchases(): JSX.Element {
       return;
     }
     const rows: string[][] = [
-      [
-        "S.No",
-        "Invoice",
-        "Date",
-        "Customer",
-        "Payment",
-        "Item SKU",
-        "Item Name",
-        "Qty",
-        "Unit",
-        "Unit Price",
-        "Discount/unit",
-        "GST%",
-        "Line Subtotal",
-        "Line GST",
-        "Line Total",
-      ],
+      ["Invoice", "Date", "Customer", "Phone", "Payment", "Item SKU", "Item Name", "Qty", "Unit Price", "Line Total", "Order Subtotal", "Order Discount", "Order GST", "Order Total"]
     ];
-    visible.forEach((p, idx) => {
+    visible.forEach((p) => {
       p.items.forEach((it) => {
-        const priceBeforeDiscount = it.unitPrice * it.qty;
-        const discount = (it.discountPerUnit || 0) * it.qty;
-        const taxable = priceBeforeDiscount - discount;
-        const gst = taxable * ((it.gstPercent || 0) / 100);
-        const lineTotal = taxable + gst;
         rows.push([
-          String(idx + 1),
-          p.invoiceNo,
-          new Date(p.date).toLocaleString(),
-          p.customer || "-",
-          p.paymentMethod || "-",
+          `INV-${p.id}`,
+          p.displayDate,
+          p.customer,
+          p.phone,
+          p.paymentMethod,
           it.sku,
           it.name,
           String(it.qty),
-          it.unit,
-          String(it.unitPrice),
-          String(it.discountPerUnit ?? 0),
-          String(it.gstPercent ?? 0),
-          (taxable).toFixed(2),
-          gst.toFixed(2),
-          lineTotal.toFixed(2),
+          String(it.unitPrice.toFixed(2)),
+          String((it.unitPrice * it.qty).toFixed(2)),
+          p.subtotal != null ? String(Number(p.subtotal).toFixed(2)) : "",
+          p.discount_value != null ? String(Number(p.discount_value).toFixed(2)) : "",
+          p.gst_amount != null ? String(Number(p.gst_amount).toFixed(2)) : "",
+          p.total != null ? String(Number(p.total).toFixed(2)) : "",
         ]);
       });
     });
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n");
+    const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -195,45 +809,47 @@ export default function POSPurchases(): JSX.Element {
     toast.success("CSV exported");
   }
 
+  // Skeleton row for table
+  const TableSkeletonRow = ({ keyIndex = 0 }: { keyIndex?: number }) => (
+    <tr key={"skeleton-" + keyIndex} className="border-b">
+      <td className="p-3"><div className="h-4 w-4 bg-slate-200 rounded animate-pulse" /></td>
+      <td className="p-3"><div className="h-4 w-28 bg-slate-200 rounded animate-pulse" /></td>
+      <td className="p-3"><div className="h-4 w-36 bg-slate-200 rounded animate-pulse" /></td>
+      <td className="p-3"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse" /></td>
+      <td className="p-3"><div className="h-4 w-24 bg-slate-200 rounded animate-pulse" /></td>
+      <td className="p-3"><div className="h-4 w-20 bg-slate-200 rounded animate-pulse" /></td>
+      <td className="p-3"><div className="h-4 w-56 bg-slate-200 rounded animate-pulse" /></td>
+      <td className="p-3 text-right"><div className="h-4 w-20 bg-slate-200 rounded ml-auto animate-pulse" /></td>
+    </tr>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <Toaster position="top-right" />
+
+      {/* Header + filters */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">POS — Purchases / Transactions</h1>
-          <p className="text-sm text-slate-500 mt-1">All purchases you made are listed below. Click any row to view full billing details.</p>
+          <h1 className="text-xl font-bold text-slate-900">POS- Purchases / Transactions</h1>
         </div>
-
-        <div className="flex gap-2 w-full md:w-auto">
-          <button onClick={exportCsv} className="px-4 py-2 rounded bg-emerald-600 text-white hover:bg-emerald-700">
-            Export CSV
-          </button>
-        </div>
-      </div>
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm mb-6 flex flex-col md:flex-row gap-3 items-center">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-slate-600">From</label>
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="p-2 border rounded" />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-slate-600">To</label>
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="p-2 border rounded" />
-        </div>
-
-        <div className="flex-1">
+        <div className="flex gap-2 w-full md:w-auto items-center">
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-slate-600">From</label>
+            <input type="date" value={from} onChange={(e) => onChangeFrom(e.target.value)} className="p-2 border rounded" />
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-slate-600">To</label>
+            <input type="date" value={to} onChange={(e) => onChangeTo(e.target.value)} className="p-2 border rounded" />
+          </div>
           <input
             placeholder="Search invoice / customer / item..."
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            className="w-full p-2 border rounded"
+            className="p-2 border rounded w-80"
           />
-        </div>
-
-        <div className="text-sm text-slate-600">
-          Showing <span className="font-semibold">{visible.length}</span> transactions
+          <button onClick={handleSearch} className="px-4 py-2 rounded bg-indigo-600 text-white">Search</button>
+          <button onClick={handleReset} className="px-3 py-2 rounded border">Reset</button>
+          <button onClick={exportCsv} className="ml-4 px-2 py-2 rounded bg-emerald-600 text-white">Export<span>CSV</span></button>
         </div>
       </div>
 
@@ -242,197 +858,81 @@ export default function POSPurchases(): JSX.Element {
         <table className="w-full table-auto min-w-[900px]">
           <thead className="bg-slate-50">
             <tr>
-              <th className="p-3 text-left">#</th>
+              <th className="p-3 text-left">Sno</th>
               <th className="p-3 text-left">Invoice</th>
               <th className="p-3 text-left">Date</th>
-              <th className="p-3 text-left">Customer</th>
+              <th className="p3 text-left">Customer</th>
+              <th className="p-3 text-left">Phone</th>
               <th className="p-3 text-left">Payment</th>
               <th className="p-3 text-left">Items</th>
               <th className="p-3 text-right">Total</th>
             </tr>
           </thead>
-
           <tbody>
-            {visible.map((p, idx) => {
-              // compute purchase totals
-              let purchaseTotal = 0;
-              p.items.forEach((it) => {
-                const priceBefore = it.unitPrice * it.qty;
-                const discount = (it.discountPerUnit || 0) * it.qty;
-                const taxable = priceBefore - discount;
-                const gst = taxable * ((it.gstPercent || 0) / 100);
-                purchaseTotal += taxable + gst;
-              });
-              return (
-                <tr
-                  key={p.id}
-                  className="border-b hover:bg-slate-50 cursor-pointer"
-                  onClick={() => setDrawerPurchase(p)}
-                >
-                  <td className="p-3 align-top w-12">{idx + 1}</td>
-                  <td className="p-3 align-top">
-                    <div className="font-medium">{p.invoiceNo}</div>
-                    <div className="text-xs text-slate-400">{p.id}</div>
-                  </td>
-                  <td className="p-3 align-top">{new Date(p.date).toLocaleString()}</td>
-                  <td className="p-3 align-top">{p.customer || "Walk-in"}</td>
-                  <td className="p-3 align-top">{p.paymentMethod || "-"}</td>
-                  <td className="p-3 align-top">
-                    <div className="space-y-1 text-sm">
-                      {p.items.map((it) => (
-                        <div key={it.sku} className="flex items-center gap-3">
-                          <div className="font-medium">{it.name}</div>
-                          <div className="text-xs text-slate-500">• {it.qty} × {it.unitPrice}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="p-3 align-top text-right font-semibold">{formatCurrency(purchaseTotal)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-
-          <tfoot>
-            <tr className="bg-slate-50">
-              <td colSpan={6} className="p-3 text-right font-medium">Subtotal</td>
-              <td className="p-3 text-right">{formatCurrency(totals.subtotal)}</td>
-            </tr>
-            <tr className="bg-slate-50">
-              <td colSpan={6} className="p-3 text-right font-medium">Total Discount</td>
-              <td className="p-3 text-right">-{formatCurrency(totals.totalDiscount)}</td>
-            </tr>
-            <tr className="bg-slate-50">
-              <td colSpan={6} className="p-3 text-right font-medium">Total GST</td>
-              <td className="p-3 text-right">{formatCurrency(totals.totalGst)}</td>
-            </tr>
-            <tr className="bg-slate-50">
-              <td colSpan={6} className="p-3 text-right font-bold">Grand Total</td>
-              <td className="p-3 text-right font-bold">{formatCurrency(totals.grandTotal)}</td>
-            </tr>
-          </tfoot>
-        </table>
-      </div>
-
-      {/* Drawer: purchase details */}
-      {drawerPurchase && (
-        <div className="fixed inset-0 z-50 flex">
-          {/* overlay */}
-          <div className="absolute inset-0 bg-black/30" onClick={() => setDrawerPurchase(null)} />
-
-          <aside className="ml-auto w-full sm:w-[560px] bg-white h-full shadow-2xl overflow-auto p-6">
-            <div className="flex items-start justify-between mb-4">
-              <div>
-                <h2 className="text-xl font-semibold">Invoice: {drawerPurchase.invoiceNo}</h2>
-                <div className="text-sm text-slate-500">{drawerPurchase.customer || "Walk-in"}</div>
-                <div className="text-xs text-slate-400 mt-1">{new Date(drawerPurchase.date).toLocaleString()}</div>
-              </div>
-              <div>
-                <button onClick={() => setDrawerPurchase(null)} className="px-3 py-2 rounded bg-slate-100">Close</button>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <table className="w-full text-left table-auto">
-                <thead className="bg-slate-50">
-                  <tr>
-                    <th className="p-2 text-left">SKU</th>
-                    <th className="p-2 text-left">Item</th>
-                    <th className="p-2 text-right">Qty</th>
-                    <th className="p-2 text-right">Unit</th>
-                    <th className="p-2 text-right">Unit Price</th>
-                    <th className="p-2 text-right">Discount</th>
-                    <th className="p-2 text-right">GST</th>
-                    <th className="p-2 text-right">Line Total</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {drawerPurchase.items.map((it) => {
-                    const priceBefore = it.unitPrice * it.qty;
-                    const discount = (it.discountPerUnit || 0) * it.qty;
-                    const taxable = priceBefore - discount;
-                    const gst = taxable * ((it.gstPercent || 0) / 100);
-                    const lineTotal = taxable + gst;
-                    return (
-                      <tr key={it.sku} className="border-b">
-                        <td className="p-2">{it.sku}</td>
-                        <td className="p-2">{it.name}</td>
-                        <td className="p-2 text-right">{it.qty}</td>
-                        <td className="p-2 text-right">{it.unit}</td>
-                        <td className="p-2 text-right">{formatCurrency(it.unitPrice)}</td>
-                        <td className="p-2 text-right">-{formatCurrency(it.discountPerUnit ?? 0)}</td>
-                        <td className="p-2 text-right">{it.gstPercent ?? 0}%</td>
-                        <td className="p-2 text-right font-semibold">{formatCurrency(lineTotal)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* billing summary */}
-            <div className="mt-4 space-y-2">
-              <div className="flex justify-between">
-                <div className="text-sm text-slate-600">Subtotal</div>
-                <div className="font-medium">
-                  {formatCurrency(
-                    drawerPurchase.items.reduce((s, it) => s + it.unitPrice * it.qty, 0)
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-between">
-                <div className="text-sm text-slate-600">Total Discount</div>
-                <div className="font-medium">
-                  -{formatCurrency(drawerPurchase.items.reduce((s, it) => s + (it.discountPerUnit || 0) * it.qty, 0))}
-                </div>
-              </div>
-
-              <div className="flex justify-between">
-                <div className="text-sm text-slate-600">Total GST</div>
-                <div className="font-medium">
-                  {formatCurrency(
-                    drawerPurchase.items.reduce((s, it) => {
-                      const priceBefore = it.unitPrice * it.qty;
-                      const discount = (it.discountPerUnit || 0) * it.qty;
-                      const taxable = priceBefore - discount;
-                      return s + taxable * ((it.gstPercent || 0) / 100);
-                    }, 0)
-                  )}
-                </div>
-              </div>
-
-              <div className="flex justify-between pt-2 border-t text-lg font-bold">
-                <div>Grand Total</div>
-                <div>
-                  {formatCurrency(
-                    drawerPurchase.items.reduce((s, it) => {
-                      const priceBefore = it.unitPrice * it.qty;
-                      const discount = (it.discountPerUnit || 0) * it.qty;
-                      const taxable = priceBefore - discount;
-                      const gst = taxable * ((it.gstPercent || 0) / 100);
-                      return s + taxable + gst;
-                    }, 0)
-                  )}
-                </div>
-              </div>
-
-              <div className="flex gap-2 mt-4">
-                <button className="px-4 py-2 rounded bg-indigo-600 text-white">Make Payment</button>
-                <button className="px-4 py-2 rounded border">Print Invoice</button>
-                <button className="px-4 py-2 rounded bg-rose-500 text-white">Refund</button>
-              </div>
-            </div>
-
-            {drawerPurchase.note && (
-              <div className="mt-6 text-sm text-slate-600">
-                <strong>Note:</strong> {drawerPurchase.note}
-              </div>
+            {loading && initialLoading === false && (
+              <>
+                <TableSkeletonRow keyIndex={1} />
+                <TableSkeletonRow keyIndex={2} />
+                <TableSkeletonRow keyIndex={3} />
+              </>
             )}
-          </aside>
+            {!loading && visible.map((p, idx) => (
+              <tr key={p.id + "-" + idx} className="border-b hover:bg-slate-50 cursor-pointer">
+                <td className="p-3">{idx + 1}</td>
+                <td className="p-3"><div className="font-medium">{p.id}</div></td>
+                <td className="p-3">{p.displayDate}</td>
+                <td className="p-3">{p.customer}</td>
+                <td className="p-3">{p.phone}</td>
+                <td className="p-3">{p.paymentMethod}</td>
+                <td className="p-3">
+                  <div className="space-y-1 text-sm">
+                    {p.items.map((it) => (
+                      <div key={it.sku} className="flex items-center gap-3">
+                        <div className="font-medium">{it.name}</div>
+                      </div>
+                    ))}
+                  </div>
+                </td>
+                <td className="p-3 text-right font-semibold">{formatCurrency(p.total)}</td>
+              </tr>
+            ))}
+            {!loading && !visible.length && (
+              <tr>
+                <td colSpan={8} className="p-6 text-center text-slate-500">No purchases found</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {/* Totals block (added as requested) */}
+        <div className="p-6 border-t bg-white">
+          <div className="max-w-[900px] ml-auto">
+            <div className="w-1/3 ml-auto">
+              <div className="flex justify-between py-1 text-sm">
+                <div className="text-sm text-slate-600">Subtotal</div>
+                <div className="font-medium">{formatCurrency(totals.subtotal)}</div>
+              </div>
+
+              <div className="flex justify-between py-1 text-sm">
+                <div className="text-sm text-slate-600">Total Discount</div>
+                <div className="font-medium">-{formatCurrency(totals.discount)}</div>
+              </div>
+
+              <div className="flex justify-between py-1 text-sm">
+                <div className="text-sm text-slate-600">Total GST</div>
+                <div className="font-medium">{formatCurrency(totals.gst)}</div>
+              </div>
+
+              <div className="flex justify-between pt-4 border-t text-lg font-bold">
+                <div>Grand Total</div>
+                <div>{formatCurrency(totals.grand)}</div>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+
+      </div>
     </div>
   );
 }
+
