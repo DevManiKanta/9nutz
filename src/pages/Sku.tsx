@@ -817,6 +817,7 @@ const InventoryManager: React.FC = () => {
     try {
       const res = await api.get("/admin/settings/stock-inventory/show");
       const body = res.data;
+      console.log("BODY",body)
       const rows: any[] = Array.isArray(body)
         ? body
         : Array.isArray(body?.data)

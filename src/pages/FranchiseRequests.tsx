@@ -114,7 +114,7 @@ export default function FranchiseRequests(): JSX.Element {
       <Toaster position="top-right" />
 
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-slate-900">Franchise Requests</h1>
+        <h1 className="text-2xl font-bold text-slate-900">Franchise Requests-in-Progress</h1>
         <button
           onClick={fetchRequests}
           className="px-4 py-2 rounded bg-slate-100 hover:bg-slate-200"

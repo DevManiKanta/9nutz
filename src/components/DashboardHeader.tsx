@@ -8,7 +8,9 @@ import {
   Home,
   Package,
   Building2,
-  BarChart3
+  BarChart3,
+  Users,
+  Map
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -56,11 +58,11 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
     { key: "products", label: "Products", path: "/products", Icon: Package },
     { key: "customerSaleHistory", label: "Category", path: "/categorywisesale", Icon:BarChart3 },
     { key: "franchise", label: "Franchise", path: "/franchise", Icon: Building2 },
+     { key: "customer", label: "Point of Sale", path: "/Customer", Icon: Users },
+    { key: "routemap", label: "Pos Details", path: "/routemap", Icon:Map },
     // { key: "customer", label: "Customer", path: "/customer", Icon: Users },
     // { key: "StockVariation", label: "Expenses Summary", path: "/stockvariation", Icon: Repeat },
   ];
-
-  // close popovers on outside click and ESC
   useEffect(() => {
     function handleDocClick(e: MouseEvent | TouchEvent | KeyboardEvent) {
       const target = (e as MouseEvent).target as Node | null;
@@ -127,7 +129,7 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
         <div className="w-25 h-10 flex items-center justify-center overflow-hidden">
           <img src={IMAGES.Nutz} alt="Logo" className="w-full h-full object-contain" />
         </div>
-        <div className="relative flex-1">
+        {/* <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <Input
             type="text"
@@ -137,7 +139,7 @@ export const DashboardHeader: React.FC<HeaderProps> = ({
             className="pl-9 pr-4 bg-gray-50 border border-gray-200 rounded-full h-10 focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
             aria-label="Search"
           />
-        </div>
+        </div> */}
       </div>
 
       {/* Right: Plus popup, Notifications, Settings, User */}

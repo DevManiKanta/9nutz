@@ -464,7 +464,7 @@ export default function StockVariation({ data }: { data?: ExpenseRecord[] }) {
       {/* Filters & header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold">Expense Summary</h3>
+          <h3 className="text-lg font-semibold">Expense Summary- in-progress</h3>
           <p className="text-xs text-slate-500">
             Showing <span className="font-medium">{filtered.length}</span> txn(s) • Grand total:{" "}
             <span className="font-medium">{formatINR(grandTotal)}</span>
