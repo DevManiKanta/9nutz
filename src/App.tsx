@@ -73,18 +73,18 @@ const App = () => (
       <AuthProvider>
         <BrowserRouter>
           <Routes>
-            <Route path="/login" element={<LoginForm />} />
+            <Route path="/login"  element={
+            <LoginForm />
+        } />
             {/* <Route path="/signup" element={<SignupForm />} /> */}
             <Route path="/forgot-password" element={<ForgotPasswordForm />} />
             {/* Protected Routes */}
             <Route
               path="/dashboard"
               element={
-                <ProtectedRoute>
                   <DashboardLayout>
                     <Dashboard />
                   </DashboardLayout>
-                </ProtectedRoute>
               }
             />
             <Route
@@ -554,4 +554,40 @@ const App = () => (
 );
 
 export default App;
+// src/App.tsx
+// import React from "react";
+// import { BrowserRouter, Routes, Route } from "react-router-dom";
+// import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+// import { AuthProvider } from "../src/components/auth/";
+// import ProtectedRoute from "../src/components/auth/PublicRoute";
+// import PublicRoute from "../src/components/auth/PublicRoute";
+// import { LoginForm } from "./components/auth/LoginForm";
+// import { DashboardLayout } from "./layouts/DashboardLayout";
+// import Dashboard from "@/pages/Dashboard";
+// import Products from "@/pages/Products";
+// import NotFound from "@/pages/NotFound";
+// // ... import other pages/components
+
+// const queryClient = new QueryClient();
+
+// const App = () => (
+//   <QueryClientProvider client={queryClient}>
+//     <AuthProvider>
+//       <BrowserRouter>
+//         <Routes>
+//           <Route path="/login" element={<PublicRoute><LoginForm /></PublicRoute>} />
+//           <Route path="/" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
+//           <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
+//           <Route path="/products" element={<ProtectedRoute><DashboardLayout><Products /></DashboardLayout></ProtectedRoute>} />
+//           {/* ... other protected routes */}
+//           <Route path="*" element={<ProtectedRoute><DashboardLayout><NotFound /></DashboardLayout></ProtectedRoute>} />
+//         </Routes>
+//       </BrowserRouter>
+//     </AuthProvider>
+//   </QueryClientProvider>
+// );
+
+// export default App;
+
+
 

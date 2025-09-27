@@ -25,7 +25,7 @@ interface SidebarProps {
 }
 
 const navigationItems = [
-  { id: "dashboard", label: "Dashboard", path: "/CommingSoon", icon: Home },
+  { id: "dashboard", label: "Dashboard", path: "/dashboard", icon: Home },
   { id: "products", label: "Products", path: "/products", icon: Package },
   { id: "customerSaleHistory", label: "Category", path: "/categorywisesale", icon: BarChart3 },
   { id: "franchise", label: "Franchise", path: "/franchise", icon: Building2 },

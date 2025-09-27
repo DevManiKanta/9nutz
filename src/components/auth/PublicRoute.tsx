@@ -1,23 +1,44 @@
+// import React from "react";
+// import { Navigate } from "react-router-dom";
+// import { useAuth } from "../contexts/AuthContext";
+
+// type PublicRouteProps = {
+//   children: React.ReactNode;
+// };
+
+// const PublicRoute = ({ children }: PublicRouteProps) => {
+//   const { user, isLoading } = useAuth();
+
+//   if (isLoading) {
+//     return <div className="flex items-center justify-center h-screen">Loading...</div>;
+//   }
+
+//   // If user is logged in → redirect to products (or dashboard)
+//   if (user) {
+//     return <Navigate to="/products" replace />;
+//   }
+
+//   // Else allow public access
+//   return <>{children}</>;
+// };
+
+// export default PublicRoute;
+// src/components/PublicRoute.tsx
 import React from "react";
 import { Navigate } from "react-router-dom";
-import { useAuth } from "@/components/contexts/AuthContext";
+import { useAuth } from "../contexts/AuthContext"; // adjust path
 
 type Props = { children: React.ReactNode };
 
 const PublicRoute: React.FC<Props> = ({ children }) => {
-  const { user, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
 
-  // Show loading placeholder while auth subsystem determines state
   if (isLoading) {
     return <div className="flex items-center justify-center h-screen">Loading...</div>;
   }
-
-  // If logged in — redirect to dashboard (replace history)
-  if (user) {
+  if (isAuthenticated) {
     return <Navigate to="/dashboard" replace />;
   }
-
-  // otherwise show the public route (login, forgot password, etc.)
   return <>{children}</>;
 };
 
