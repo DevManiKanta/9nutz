@@ -25,14 +25,14 @@ interface SidebarProps {
 }
 
 const navigationItems = [
-  { id: "dashboard", label: "Dashboard", path: "/dashboard", icon: Home },
+  { id: "dashboard", label: "Dashboard", path: "/CommingSoon", icon: Home },
   { id: "products", label: "Products", path: "/products", icon: Package },
   { id: "customerSaleHistory", label: "Category", path: "/categorywisesale", icon: BarChart3 },
   { id: "franchise", label: "Franchise", path: "/franchise", icon: Building2 },
   { id: "customer", label: "Point of Sale", path: "/Customer", icon: Users },
-  { id: "StockVariation", label: "Expenses Summary", path: "/StockVariation", icon: Repeat },
+  { id: "StockVariation", label: "Expenses Summary", path: "/CommingSoon", icon: Repeat },
   { id: "routemap", label: "Pos Details", path: "/routemap", icon: Map },
-  { id: "Franchiserequests", label: "Franchise Request", path: "/Franchiserequests", icon: Map },
+  { id: "Franchiserequests", label: "Franchise Request", path: "/CommingSoon", icon: Map },
 ];
 
 const settingsChildren = [
@@ -145,7 +145,6 @@ export const DashboardSidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle
                   </span>
                 )}
               </div>
-
               {!isCollapsed && (
                 <ChevronDown
                   className={cn("h-4 w-4 transition-transform", settingsOpen ? "rotate-180 text-amber-700" : "rotate-0 text-amber-900")}

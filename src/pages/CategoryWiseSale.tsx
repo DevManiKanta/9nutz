@@ -2,15 +2,7 @@
 // import React, { useEffect, useRef, useState } from "react";
 // import { Plus, X, Edit2, Trash2 } from "lucide-react";
 // import toast, { Toaster } from "react-hot-toast";
-
-// const API_BASE = "http://192.168.29.100:8000/api";
-// const ENDPOINTS = {
-//   list: `${API_BASE}/admin/categories/show`,
-//   create: `${API_BASE}/admin/categories/add`,
-//   show: (id: string | number) => `${API_BASE}/admin/categories/show/${id}`,
-//   update: (id: string | number) => `${API_BASE}/admin/categories/update/${id}`,
-//   delete: (id: string | number) => `${API_BASE}/admin/categories/delete/${id}`,
-// };
+// import api from "../../src/api/axios"
 
 // const SAMPLE_IMG = "/mnt/data/54197a23-6bd1-4ec0-9e69-8d2be56a0782.png";
 // const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
@@ -40,21 +32,17 @@
 //   const [submitting, setSubmitting] = useState(false);
 //   const [editingId, setEditingId] = useState<string | number | null>(null);
 
-//   // helper: get token or null
-//   const getToken = (): string | null => {
-//     try {
-//       return localStorage.getItem("token");
-//     } catch (e) {
-//       console.warn("Failed to read token from localStorage", e);
-//       return null;
-//     }
-//   };
-
 //   // normalization helper: prefer image_url (full URL) returned by server
 //   const normalizeRow = (r: any, i = 0): CategoryItem => ({
 //     id: r.id ?? r._id ?? r.categoryId ?? `srv-${i}`,
 //     category: (r.name ?? r.category ?? r.title ?? `Category ${i + 1}`).toString(),
-//     image: r.image_url ?? r.imageUrl ?? r.image ?? r.photo ?? (r.name ? unsplashForCategory(r.name) : undefined) ?? SAMPLE_IMG,
+//     image:
+//       r.image_url ??
+//       r.imageUrl ??
+//       r.image ??
+//       r.photo ??
+//       (r.name ? unsplashForCategory(r.name) : undefined) ??
+//       SAMPLE_IMG,
 //     createdAt: r.created_at ?? r.createdAt ?? undefined,
 //     productCount: r.products_count ?? r.count ?? 0,
 //   });
@@ -63,26 +51,11 @@
 //   const fetchCategories = async () => {
 //     setLoading(true);
 //     try {
-//       const token = getToken();
-//       if (!token) {
-//         toast.error("No auth token found — showing sample data.");
-//         setLoading(false);
-//         return;
-//       }
-
-//       const res = await fetch(ENDPOINTS.list, {
-//         method: "GET",
-//         headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-//       });
-
-//       if (!res.ok) {
-//         toast.error(`Failed to fetch categories (${res.status}) — showing sample data.`);
-//         setLoading(false);
-//         return;
-//       }
-
-//       const body = await res.json().catch(() => null);
+//       // NOTE: api instance should include baseURL (e.g. http://.../api) and auth interceptor
+//       const res = await api.get("/admin/categories/show");
+//       const body = res?.data ?? null;
 //       let rows: any[] = [];
+
 //       if (Array.isArray(body)) rows = body;
 //       else if (Array.isArray(body.data)) rows = body.data;
 //       else if (Array.isArray(body.rows)) rows = body.rows;
@@ -95,13 +68,13 @@
 //       if (rows.length) {
 //         setCategories(rows.map((r, i) => normalizeRow(r, i)));
 //       } else {
-//         // show empty list rather than sample data (you can re-enable SAMPLE if you want)
 //         setCategories([]);
 //         toast.success("No categories returned from server.");
 //       }
-//     } catch (err) {
+//     } catch (err: any) {
 //       console.error("fetchCategories error:", err);
-//       toast.error("Network error while loading categories.");
+//       const serverMsg = err?.response?.data?.message ?? err?.message ?? "Network error while loading categories.";
+//       toast.error(serverMsg);
 //       setCategories([]);
 //     } finally {
 //       setLoading(false);
@@ -127,7 +100,6 @@
 //     // Content-type check
 //     if (!file.type || !file.type.startsWith("image/")) {
 //       toast.error("Selected file is not an image. Please choose a valid image file.");
-//       // clear input
 //       if (fileRef.current) fileRef.current.value = "";
 //       setSelectedFile(null);
 //       setCatForm((p) => ({ ...p, imagePreview: "" }));
@@ -152,76 +124,60 @@
 
 //   // GET single (used when opening edit, fallback if we need fresh server data)
 //   const fetchSingle = async (id: string | number) => {
-//     const token = getToken();
-//     if (!token) throw new Error("No auth token");
-//     const res = await fetch(ENDPOINTS.show(id), {
-//       method: "GET",
-//       headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
-//     });
-//     if (!res.ok) {
-//       const err = await res.json().catch(() => null);
-//       throw new Error(err?.message || `Failed to fetch item (${res.status})`);
+//     try {
+//       const res = await api.get(`/admin/categories/show/${id}`);
+//       const body = res?.data ?? null;
+//       const item = body?.data ?? body?.category ?? body ?? null;
+//       return item ? normalizeRow(item) : null;
+//     } catch (err: any) {
+//       const msg = err?.response?.data?.message ?? err?.message ?? `Failed to fetch item`;
+//       throw new Error(msg);
 //     }
-//     const body = await res.json().catch(() => null);
-//     const item = body?.data ?? body?.category ?? body ?? null;
-//     return item ? normalizeRow(item) : null;
 //   };
 
 //   // CREATE (POST with FormData -> /admin/categories/add)
 //   const createCategory = async (payload: { name: string; file?: File | null }) => {
-//     const token = getToken();
-//     if (!token) throw new Error("No auth token");
-//     const fd = new FormData();
-//     fd.append("name", payload.name);
-//     if (payload.file) fd.append("image", payload.file);
-//     const res = await fetch(ENDPOINTS.create, {
-//       method: "POST",
-//       headers: { Authorization: `Bearer ${token}` }, // do NOT set Content-Type when sending FormData
-//       body: fd,
-//     });
-//     if (!res.ok) {
-//       const err = await res.json().catch(() => null);
-//       throw new Error(err?.message || `Create failed (${res.status})`);
+//     try {
+//       const fd = new FormData();
+//       fd.append("name", payload.name);
+//       if (payload.file) fd.append("image", payload.file);
+
+//       const res = await api.post("/admin/categories/add", fd);
+//       const body = res?.data ?? null;
+//       const serverItem = body?.data ?? body?.category ?? body ?? null;
+//       return serverItem ? normalizeRow(serverItem) : null;
+//     } catch (err: any) {
+//       const msg = err?.response?.data?.message ?? err?.message ?? "Create failed";
+//       throw new Error(msg);
 //     }
-//     const body = await res.json().catch(() => null);
-//     const serverItem = body?.data ?? body?.category ?? body ?? null;
-//     return serverItem ? normalizeRow(serverItem) : null;
 //   };
 
 //   // UPDATE (POST with FormData -> /admin/categories/update/:id)
 //   const updateCategory = async (id: string | number, payload: { name: string; file?: File | null }) => {
-//     const token = getToken();
-//     if (!token) throw new Error("No auth token");
-//     const fd = new FormData();
-//     fd.append("name", payload.name);
-//     if (payload.file) fd.append("image", payload.file);
-//     const res = await fetch(ENDPOINTS.update(id), {
-//       method: "POST",
-//       headers: { Authorization: `Bearer ${token}` },
-//       body: fd,
-//     });
-//     if (!res.ok) {
-//       const err = await res.json().catch(() => null);
-//       throw new Error(err?.message || `Update failed (${res.status})`);
+//     try {
+//       const fd = new FormData();
+//       fd.append("name", payload.name);
+//       if (payload.file) fd.append("image", payload.file);
+
+//       const res = await api.post(`/admin/categories/update/${id}`, fd);
+//       const body = res?.data ?? null;
+//       const serverItem = body?.data ?? body?.category ?? body ?? null;
+//       return serverItem ? normalizeRow(serverItem) : null;
+//     } catch (err: any) {
+//       const msg = err?.response?.data?.message ?? err?.message ?? "Update failed";
+//       throw new Error(msg);
 //     }
-//     const body = await res.json().catch(() => null);
-//     const serverItem = body?.data ?? body?.category ?? body ?? null;
-//     return serverItem ? normalizeRow(serverItem) : null;
 //   };
 
 //   // DELETE -> /admin/categories/delete/:id
 //   const deleteCategoryReq = async (id: string | number) => {
-//     const token = getToken();
-//     if (!token) throw new Error("No auth token");
-//     const res = await fetch(ENDPOINTS.delete(id), {
-//       method: "DELETE",
-//       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
-//     });
-//     if (!res.ok) {
-//       const err = await res.json().catch(() => null);
-//       throw new Error(err?.message || `Delete failed (${res.status})`);
+//     try {
+//       await api.delete(`/admin/categories/delete/${id}`);
+//       return true;
+//     } catch (err: any) {
+//       const msg = err?.response?.data?.message ?? err?.message ?? "Delete failed";
+//       throw new Error(msg);
 //     }
-//     return true;
 //   };
 
 //   // open drawer for create
@@ -241,7 +197,7 @@
 //     try {
 //       const server = await fetchSingle(item.id);
 //       setCatForm({ category: server?.category ?? item.category, imagePreview: server?.image ?? item.image ?? "" });
-//     } catch (err) {
+//     } catch {
 //       setCatForm({ category: item.category, imagePreview: item.image ?? "" });
 //     }
 //     setDrawerOpen(true);
@@ -264,17 +220,14 @@
 //       }
 //     }
 
-//     // For both create and update: if a file is present, we already validated it in handleFile (type + size)
 //     setSubmitting(true);
 //     const payload = { name: catForm.category.trim(), file: selectedFile };
 
 //     try {
 //       if (editingId) {
-//         // update (image optional)
 //         await updateCategory(editingId, payload);
 //         toast.success("Category updated");
 //       } else {
-//         // create (image required)
 //         await createCategory(payload);
 //         toast.success("Category created");
 //       }
@@ -286,7 +239,8 @@
 //       if (fileRef.current) fileRef.current.value = "";
 //     } catch (err: any) {
 //       console.error("submit error:", err);
-//       toast.error(err?.message || "Failed to save category");
+//       const serverMsg = err?.message ?? "Failed to save category";
+//       toast.error(serverMsg);
 //     } finally {
 //       setSubmitting(false);
 //       setEditingId(null);
@@ -305,7 +259,8 @@
 //     } catch (err: any) {
 //       console.error("delete error:", err);
 //       setCategories(prev);
-//       toast.error(err?.message || "Failed to delete category");
+//       const serverMsg = err?.message ?? "Failed to delete category";
+//       toast.error(serverMsg);
 //     }
 //   };
 
@@ -317,11 +272,16 @@
 //           <h1 className="text-2xl font-semibold text-slate-800">Categories</h1>
 //         </div>
 //         <div className="ml-auto flex items-center gap-3">
-//           <button onClick={openCreate}       className="bg-chart-primary hover:bg-chart-primary/90 flex items-center py-2 px-4 rounded-md shadow-sm" title="Add Category">
-//            Add Category
+//           <button
+//             onClick={openCreate}
+//             className="bg-chart-primary hover:bg-chart-primary/90 flex items-center py-2 px-4 rounded-md shadow-sm"
+//             title="Add Category"
+//           >
+//             Add Category
 //           </button>
 //         </div>
 //       </div>
+
 //       {/* Grid */}
 //       <div className="mb-6">
 //         {loading ? (
@@ -340,9 +300,20 @@
 //           <div className="flex flex-wrap gap-8">
 //             {categories.map((c) => (
 //               <div key={String(c.id)} className="w-full sm:w-1/2 md:w-1/3 lg:w-1/4 xl:w-1/5 flex flex-col items-center text-center">
-//                 <div className="w-36 h-36 rounded-full overflow-hidden bg-white shadow-md flex items-center justify-center" style={{ boxShadow: "0 6px 18px rgba(0,0,0,0.08)" }}>
+//                 <div
+//                   className="w-36 h-36 rounded-full overflow-hidden bg-white shadow-md flex items-center justify-center"
+//                   style={{ boxShadow: "0 6px 18px rgba(0,0,0,0.08)" }}
+//                 >
 //                   {c.image ? (
-//                     <img src={c.image} alt={c.category} className="w-full h-full object-cover" loading="lazy" onError={(e) => { (e.currentTarget as HTMLImageElement).src = unsplashForCategory(c.category, "600x400"); }} />
+//                     <img
+//                       src={c.image}
+//                       alt={c.category}
+//                       className="w-full h-full object-cover"
+//                       loading="lazy"
+//                       onError={(e) => {
+//                         (e.currentTarget as HTMLImageElement).src = unsplashForCategory(c.category, "600x400");
+//                       }}
+//                     />
 //                   ) : (
 //                     <img src={unsplashForCategory(c.category, "600x400")} alt={c.category} className="w-full h-full object-cover" />
 //                   )}
@@ -354,12 +325,22 @@
 
 //                   {/* ACTIONS: horizontal row below name */}
 //                   <div className="mt-3 flex items-center justify-center gap-3">
-//                     <button onClick={() => openEdit(c)} aria-label={`Edit ${c.category}`} title="Edit" className="flex items-center gap-2 px-3 py-1 rounded-md border hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-300 transition">
+//                     <button
+//                       onClick={() => openEdit(c)}
+//                       aria-label={`Edit ${c.category}`}
+//                       title="Edit"
+//                       className="flex items-center gap-2 px-3 py-1 rounded-md border hover:bg-indigo-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-indigo-300 transition"
+//                     >
 //                       <Edit2 className="w-4 h-4" />
 //                       <span className="text-sm">Edit</span>
 //                     </button>
 
-//                     <button onClick={() => handleDelete(c.id)} aria-label={`Delete ${c.category}`} title="Delete" className="flex items-center gap-2 px-3 py-1 rounded-md border hover:bg-red-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-300 transition">
+//                     <button
+//                       onClick={() => handleDelete(c.id)}
+//                       aria-label={`Delete ${c.category}`}
+//                       title="Delete"
+//                       className="flex items-center gap-2 px-3 py-1 rounded-md border hover:bg-red-600 hover:text-white focus:outline-none focus:ring-2 focus:ring-red-300 transition"
+//                     >
 //                       <Trash2 className="w-4 h-4" />
 //                       <span className="text-sm">Delete</span>
 //                     </button>
@@ -427,11 +408,14 @@
 //     </div>
 //   );
 // }
-// src/components/CategoriesShowcase.tsx
+
+// components/CategoriesShowcase.tsx
+"use client";
+
 import React, { useEffect, useRef, useState } from "react";
 import { Plus, X, Edit2, Trash2 } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
-import api from "../../src/api/axios"
+import api from "../../src/api/axios";
 
 const SAMPLE_IMG = "/mnt/data/54197a23-6bd1-4ec0-9e69-8d2be56a0782.png";
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5MB
@@ -440,7 +424,7 @@ type CategoryItem = {
   id: string | number;
   category: string;
   image?: string; // full URL
-  createdAt?: string;
+  createdAt?: string | null;
   productCount?: number;
 };
 
@@ -461,26 +445,64 @@ export default function CategoriesShowcase(): JSX.Element {
   const [submitting, setSubmitting] = useState(false);
   const [editingId, setEditingId] = useState<string | number | null>(null);
 
-  // normalization helper: prefer image_url (full URL) returned by server
-  const normalizeRow = (r: any, i = 0): CategoryItem => ({
-    id: r.id ?? r._id ?? r.categoryId ?? `srv-${i}`,
-    category: (r.name ?? r.category ?? r.title ?? `Category ${i + 1}`).toString(),
-    image:
-      r.image_url ??
-      r.imageUrl ??
-      r.image ??
-      r.photo ??
+  // --- IMPORTANT CHANGE: improved normalization that converts relative `image` into absolute URL ---
+  const normalizeRow = (r: any, i = 0): CategoryItem => {
+    // parse product count safely (may be string)
+    const rawCount = r.products_count ?? r.count ?? r.productsCount ?? 0;
+    const parsedCount = typeof rawCount === "string" ? Number(rawCount || 0) : Number(rawCount ?? 0);
+
+    // prefer explicit full URL returned by server
+    let resolvedImage: string | undefined = undefined;
+
+    if (r.image_url && String(r.image_url).trim()) {
+      resolvedImage = String(r.image_url).trim();
+    } else if (r.imageUrl && String(r.imageUrl).trim()) {
+      resolvedImage = String(r.imageUrl).trim();
+    } else if (r.image && String(r.image).trim()) {
+      // r.image may be a relative path like 'categories/xxx.png' — convert to absolute using api.defaults.baseURL if available
+      const raw = String(r.image).trim();
+
+      // If it already looks absolute, use it
+      if (/^https?:\/\//i.test(raw)) {
+        resolvedImage = raw;
+      } else {
+        // try to resolve relative against axios baseURL, fallback to window.location.origin
+        try {
+          // api.defaults.baseURL may be something like "https://9nutsapi.nearbydoctors.in/public" or "https://9nutsapi.nearbydoctors.in/public/api"
+          const baseCandidate = String((api && (api as any).defaults && (api as any).defaults.baseURL) || window.location.origin);
+          // ensure base ends with slash so new URL handles relative properly
+          const base = baseCandidate.endsWith("/") ? baseCandidate : baseCandidate + "/";
+          resolvedImage = new URL(raw.replace(/^\/+/, ""), base).toString();
+        } catch (e) {
+          // fallback: try to guess common storage path used by your API (this is conservative)
+          try {
+            resolvedImage = `${window.location.origin}/storage/${raw.replace(/^\/+/, "")}`;
+          } catch {
+            resolvedImage = undefined;
+          }
+        }
+      }
+    }
+
+    // final fallback: use unsplash or sample image
+    const finalImage =
+      resolvedImage ??
       (r.name ? unsplashForCategory(r.name) : undefined) ??
-      SAMPLE_IMG,
-    createdAt: r.created_at ?? r.createdAt ?? undefined,
-    productCount: r.products_count ?? r.count ?? 0,
-  });
+      SAMPLE_IMG;
+
+    return {
+      id: r.id ?? r._id ?? r.categoryId ?? `srv-${i}`,
+      category: (r.name ?? r.category ?? r.title ?? `Category ${i + 1}`).toString(),
+      image: finalImage,
+      createdAt: r.created_at ?? r.createdAt ?? null,
+      productCount: Number.isFinite(parsedCount) ? parsedCount : 0,
+    };
+  };
 
   // FETCH (GET all)
   const fetchCategories = async () => {
     setLoading(true);
     try {
-      // NOTE: api instance should include baseURL (e.g. http://.../api) and auth interceptor
       const res = await api.get("/admin/categories/show");
       const body = res?.data ?? null;
       let rows: any[] = [];
@@ -519,14 +541,12 @@ export default function CategoriesShowcase(): JSX.Element {
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] ?? null;
 
-    // If user cleared input
     if (!file) {
       setSelectedFile(null);
       setCatForm((p) => ({ ...p, imagePreview: "" }));
       return;
     }
 
-    // Content-type check
     if (!file.type || !file.type.startsWith("image/")) {
       toast.error("Selected file is not an image. Please choose a valid image file.");
       if (fileRef.current) fileRef.current.value = "";
@@ -535,7 +555,6 @@ export default function CategoriesShowcase(): JSX.Element {
       return;
     }
 
-    // Size check
     if (file.size > MAX_IMAGE_BYTES) {
       toast.error("Image too large (max 5MB). Please select a smaller file.");
       if (fileRef.current) fileRef.current.value = "";
@@ -544,7 +563,6 @@ export default function CategoriesShowcase(): JSX.Element {
       return;
     }
 
-    // All good -> set file and preview
     setSelectedFile(file);
     const reader = new FileReader();
     reader.onload = () => setCatForm((p) => ({ ...p, imagePreview: String(reader.result) }));
@@ -569,9 +587,16 @@ export default function CategoriesShowcase(): JSX.Element {
     try {
       const fd = new FormData();
       fd.append("name", payload.name);
-      if (payload.file) fd.append("image", payload.file);
+      if (payload.file) {
+        fd.append("image", payload.file, payload.file.name);
+      }
 
-      const res = await api.post("/admin/categories/add", fd);
+      const res = await api.post("/admin/categories/add", fd, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
       const body = res?.data ?? null;
       const serverItem = body?.data ?? body?.category ?? body ?? null;
       return serverItem ? normalizeRow(serverItem) : null;
@@ -586,9 +611,17 @@ export default function CategoriesShowcase(): JSX.Element {
     try {
       const fd = new FormData();
       fd.append("name", payload.name);
-      if (payload.file) fd.append("image", payload.file);
+      fd.append("_method", "PUT");
+      if (payload.file) {
+        fd.append("image", payload.file, payload.file.name);
+      }
 
-      const res = await api.post(`/admin/categories/update/${id}`, fd);
+      const res = await api.post(`/admin/categories/update/${id}`, fd, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
+
       const body = res?.data ?? null;
       const serverItem = body?.data ?? body?.category ?? body ?? null;
       return serverItem ? normalizeRow(serverItem) : null;
@@ -632,6 +665,22 @@ export default function CategoriesShowcase(): JSX.Element {
     setDrawerOpen(true);
   };
 
+  // helper: pretty date
+  const prettyDate = (iso?: string | null) => {
+    if (!iso) return "";
+    try {
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return iso;
+      return new Intl.DateTimeFormat("en-IN", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }).format(d);
+    } catch {
+      return iso;
+    }
+  };
+
   // handle submit (create or update)
   const handleSubmit = async (ev?: React.FormEvent) => {
     ev?.preventDefault();
@@ -641,7 +690,6 @@ export default function CategoriesShowcase(): JSX.Element {
       return;
     }
 
-    // Validation: When creating (editingId === null), require an image file
     if (!editingId) {
       if (!selectedFile) {
         toast.error("Please select an image for the new category (max 5MB).");
@@ -740,6 +788,7 @@ export default function CategoriesShowcase(): JSX.Element {
                       className="w-full h-full object-cover"
                       loading="lazy"
                       onError={(e) => {
+                        // fallback to Unsplash if the resolved image fails
                         (e.currentTarget as HTMLImageElement).src = unsplashForCategory(c.category, "600x400");
                       }}
                     />
@@ -750,7 +799,14 @@ export default function CategoriesShowcase(): JSX.Element {
 
                 <div className="mt-4 px-2 w-full">
                   <div className="text-green-800 font-semibold text-lg leading-tight">{c.category}</div>
-                  <div className="text-sm text-slate-500 mt-1">{(typeof c.productCount === "number" ? c.productCount : 0) + " Products"}</div>
+
+                  <div className="text-sm text-slate-500 mt-1">
+                    {(typeof c.productCount === "number" ? c.productCount : 0) + (c.productCount === 1 ? " Product" : " Products")}
+                  </div>
+
+                  {c.createdAt ? (
+                    <div className="text-xs text-slate-400 mt-1">Created {prettyDate(c.createdAt)}</div>
+                  ) : null}
 
                   {/* ACTIONS: horizontal row below name */}
                   <div className="mt-3 flex items-center justify-center gap-3">

@@ -26,7 +26,7 @@ export const LoginForm = () => {
       toast.success("Login successful");
       if (user) {
         setTimeout(() => {
-          navigate("/dashboard", { replace: true });
+          navigate("/products", { replace: true });
         }, 1000);
       } else {
         navigate("/", { replace: true });

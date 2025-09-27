@@ -40,6 +40,38 @@ type FranchiseItem = {
   image_url?: string | null;
 };
 
+const Spinner = ({ size = 16 }: { size?: number }) => (
+  <svg className="animate-spin" width={size} height={size} viewBox="0 0 24 24" fill="none">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" strokeOpacity="0.2" strokeWidth="4" />
+    <path d="M22 12a10 10 0 00-10-10" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+  </svg>
+);
+
+const formatServerValidation = (payload: any) => {
+  // returns map of field -> string
+  const out: Partial<Record<keyof FranchiseForm, string>> = {};
+  if (!payload) return out;
+  const errors = payload.errors ?? payload.validation ?? payload;
+  if (typeof errors === "object") {
+    for (const k of Object.keys(errors)) {
+      const v = errors[k];
+      const msg = Array.isArray(v) ? v.join(" ") : String(v);
+      const key = k.toLowerCase();
+      if (key.includes("name")) out.name = msg;
+      else if (key.includes("business") || key.includes("company")) out.businessName = msg;
+      else if (key.includes("address")) out.address = msg;
+      else if (key.includes("email")) out.email = msg;
+      else if (key.includes("phone") || key.includes("mobile") || key.includes("contact")) out.phone = msg;
+      else if (key.includes("password")) out.password = msg;
+      else if (key.includes("amount") || key.includes("deposit")) out.amount = msg;
+      else if (key.includes("image")) out.imageFile = msg;
+    }
+  } else if (typeof errors === "string") {
+    out.name = errors;
+  }
+  return out;
+};
+
 const Franchise: React.FC = () => {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [form, setForm] = useState<FranchiseForm>(initialForm);
@@ -52,31 +84,10 @@ const Franchise: React.FC = () => {
 
   const [editingId, setEditingId] = useState<string | number | null>(null);
 
-  // map server validation errors (if any) to a single string map we can show near inputs
-  const mapValidationErrorsToForm = (errPayload: any) => {
-    const out: Partial<Record<keyof FranchiseForm, string>> = {};
-    if (!errPayload) return out;
-    const candidates = errPayload.errors ?? errPayload.validation ?? errPayload.message ?? errPayload;
-    if (typeof candidates === "object") {
-      for (const key of Object.keys(candidates)) {
-        const val = (candidates as any)[key];
-        if (!val) continue;
-        const kLower = key.toLowerCase();
-        if (kLower.includes("name")) out.name = Array.isArray(val) ? val.join(" ") : String(val);
-        if (kLower.includes("business") || kLower.includes("company")) out.businessName = Array.isArray(val) ? val.join(" ") : String(val);
-        if (kLower.includes("address")) out.address = Array.isArray(val) ? val.join(" ") : String(val);
-        if (kLower.includes("email")) out.email = Array.isArray(val) ? val.join(" ") : String(val);
-        if (kLower.includes("phone") || kLower.includes("mobile") || kLower.includes("contact")) out.phone = Array.isArray(val) ? val.join(" ") : String(val);
-        if (kLower.includes("password")) out.password = Array.isArray(val) ? val.join(" ") : String(val);
-        if (kLower.includes("amount") || kLower.includes("deposit")) out.amount = Array.isArray(val) ? val.join(" ") : String(val);
-      }
-    } else if (typeof candidates === "string") {
-      out.name = String(candidates);
-    }
-    return out;
-  };
+  // upload progress (0-100)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
-  // Validation
+  // validation (note: require image on create)
   const validate = (): boolean => {
     const err: Partial<Record<keyof FranchiseForm, string>> = {};
     if (!form.name.trim()) err.name = "Name is required";
@@ -91,16 +102,18 @@ const Franchise: React.FC = () => {
     if (!form.amount.trim()) err.amount = "Amount is required";
     else if (!/^\d+(\.\d{1,2})?$/.test(form.amount.trim())) err.amount = "Enter a valid amount (e.g. 100 or 99.99)";
 
+    // Server expects image on create — enforce client-side
+    if (!editingId && !form.imageFile) err.imageFile = "Image is required";
+
     setErrors(err);
     return Object.keys(err).length === 0;
   };
 
-  // ---------- Fetch list (uses api instance) ----------
+  // ---------- fetch list ----------
   const fetchFranchises = async (opts?: { showErrorToast?: boolean }) => {
     setListLoading(true);
     setListError(null);
     try {
-      // api should have baseURL like `${API_HOST}/api` so path is `/admin/franchise`
       const res = await api.get("/admin/franchise");
       const body = res?.data ?? null;
       let rows: any[] = [];
@@ -152,21 +165,43 @@ const Franchise: React.FC = () => {
     if (payload.imageFile) formData.append("image", payload.imageFile);
 
     try {
-      console.log("FormData",formData)
-      const res = await api.post("/admin/franchise/add", formData);
+      // use axios onUploadProgress to show progress
+      const res = await api.post("/admin/franchise/add", formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        //ts-ignore
+        onUploadProgress: (progressEvent: ProgressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+            // small toast progress update (non-intrusive)
+            toast.dismiss("upload-progress");
+            toast.loading(`Uploading image... ${percent}%`, { id: "upload-progress" });
+          }
+        },
+      });
+
+      // clear progress toast
+      toast.dismiss("upload-progress");
+      setUploadProgress(null);
+
       const parsed = res?.data ?? null;
-      if (res.status >= 400) {
-        const validation = parsed?.errors ?? parsed?.validation ?? parsed;
-        const mapped = mapValidationErrorsToForm(validation);
+      if (parsed?.status === false) {
+        // server responded but with status false
+        const mapped = formatServerValidation(parsed);
         if (Object.keys(mapped).length) setErrors((prev) => ({ ...prev, ...mapped }));
-        throw new Error((parsed && (parsed.message || parsed.error)) || `Server error (${res.status})`);
+        throw new Error(parsed?.message ?? "Create failed");
       }
+
       return parsed?.data ?? parsed?.franchise ?? parsed ?? null;
     } catch (err: any) {
+      console.error("Create error:", err);
+      toast.dismiss("upload-progress");
+      setUploadProgress(null);
+
       const serverMsg = err?.response?.data?.message ?? err?.message ?? "Create failed";
-      const validation = err?.response?.data?.errors ?? err?.response?.data?.validation ?? null;
+      const validation = err?.response?.data?.errors ?? err?.response?.data?.validation ?? err?.response?.data ?? null;
       if (validation) {
-        const mapped = mapValidationErrorsToForm(validation);
+        const mapped = formatServerValidation(validation);
         if (Object.keys(mapped).length) setErrors((prev) => ({ ...prev, ...mapped }));
       }
       throw new Error(serverMsg);
@@ -186,20 +221,38 @@ const Franchise: React.FC = () => {
     if (payload.imageFile) formData.append("image", payload.imageFile);
 
     try {
-      const res = await api.post(`/admin/franchise/update/${id}`, formData);
+      const res = await api.post(`/admin/franchise/update/${id}`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent: ProgressEvent) => {
+          if (progressEvent.total) {
+            const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percent);
+            toast.dismiss("upload-progress");
+            toast.loading(`Uploading image... ${percent}%`, { id: "upload-progress" });
+          }
+        },
+      });
+
+      toast.dismiss("upload-progress");
+      setUploadProgress(null);
+
       const parsed = res?.data ?? null;
-      if (res.status >= 400) {
-        const validation = parsed?.errors ?? parsed?.validation ?? parsed;
-        const mapped = mapValidationErrorsToForm(validation);
+      if (parsed?.status === false) {
+        const mapped = formatServerValidation(parsed);
         if (Object.keys(mapped).length) setErrors((prev) => ({ ...prev, ...mapped }));
-        throw new Error((parsed && (parsed.message || parsed.error)) || `Server error (${res.status})`);
+        throw new Error(parsed?.message ?? "Update failed");
       }
+
       return parsed?.data ?? parsed?.franchise ?? parsed ?? null;
     } catch (err: any) {
+      console.error("Update error:", err);
+      toast.dismiss("upload-progress");
+      setUploadProgress(null);
+
       const serverMsg = err?.response?.data?.message ?? err?.message ?? "Update failed";
-      const validation = err?.response?.data?.errors ?? err?.response?.data?.validation ?? null;
+      const validation = err?.response?.data?.errors ?? err?.response?.data?.validation ?? err?.response?.data ?? null;
       if (validation) {
-        const mapped = mapValidationErrorsToForm(validation);
+        const mapped = formatServerValidation(validation);
         if (Object.keys(mapped).length) setErrors((prev) => ({ ...prev, ...mapped }));
       }
       throw new Error(serverMsg);
@@ -210,14 +263,12 @@ const Franchise: React.FC = () => {
   const deleteFranchiseApi = async (id: string | number) => {
     try {
       const res = await api.delete(`/admin/franchise/delete/${id}`);
-      if (res.status >= 400) {
-        const body = res?.data ?? null;
-        throw new Error((body && (body.message || body.error)) || `Server error (${res.status})`);
-      }
+      const body = res?.data ?? null;
+      if (body?.status === false) throw new Error(body?.message ?? "Delete failed");
       return true;
     } catch (err: any) {
-      const msg = err?.response?.data?.message ?? err?.message ?? "Delete failed";
-      throw new Error(msg);
+      console.error("Delete franchise error:", err);
+      throw new Error(err?.response?.data?.message ?? err?.message ?? "Delete failed");
     }
   };
 
@@ -239,8 +290,7 @@ const Franchise: React.FC = () => {
       const body = res?.data ?? null;
       const data = body?.data ?? body?.franchise ?? body ?? null;
       if (data) {
-        setForm((s) => ({
-          ...s,
+        setForm({
           name: data.name ?? data.franchise_name ?? item.name ?? "",
           businessName: data.business_name ?? data.businessName ?? item.businessName ?? "",
           address: data.address ?? item.address ?? "",
@@ -249,7 +299,7 @@ const Franchise: React.FC = () => {
           amount: (data.deposit_amount ?? data.amount ?? item.amount ?? "") + "",
           imageFile: null,
           password: "",
-        }));
+        });
       }
     } catch (err) {
       console.warn("Could not fetch detail for edit:", err);
@@ -262,7 +312,7 @@ const Franchise: React.FC = () => {
       setForm(initialForm);
       setErrors({});
       setEditingId(null);
-    }, 180);
+    }, 200);
   };
 
   const handleChange =
@@ -279,9 +329,10 @@ const Franchise: React.FC = () => {
     setErrors((err) => ({ ...err, imageFile: undefined }));
   };
 
-  // ---------- Submit handler ----------
+  // ---------- Submit ----------
   const handleSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+
     if (!validate()) {
       toast.error("Please fix the highlighted errors.");
       return;
@@ -299,8 +350,10 @@ const Franchise: React.FC = () => {
     };
 
     setLoading(true);
+    setUploadProgress(null);
 
     if (!editingId) {
+      // optimistic UI
       const prevList = [...franchises];
       const optimisticId = `tmp-${Date.now()}`;
       const optimisticItem: FranchiseItem = {
@@ -331,20 +384,22 @@ const Franchise: React.FC = () => {
             status: String(created?.status ?? "active").toLowerCase(),
             image_url: created?.image_url ?? created?.image ?? null,
           };
+          toast.success("Franchise created");
           return [newItem, ...withoutOptimistic];
         });
-        toast.success("Franchise created");
         setForm(initialForm);
         setErrors({});
       } catch (err: any) {
         setFranchises(prevList);
         console.error("Create franchise error:", err);
-        if (Object.keys(errors).length === 0) toast.error(err?.message || "Failed to create franchise");
+        toast.error(err?.message || "Failed to create franchise");
         setIsDrawerOpen(true);
       } finally {
         setLoading(false);
+        setUploadProgress(null);
       }
     } else {
+      // update
       const idToUpdate = editingId;
       setIsDrawerOpen(false);
       const prevSnapshot = [...franchises];
@@ -375,10 +430,11 @@ const Franchise: React.FC = () => {
       } catch (err: any) {
         console.error("Update franchise error:", err);
         setFranchises(prevSnapshot);
-        if (Object.keys(errors).length === 0) toast.error(err?.message || "Failed to update franchise");
+        toast.error(err?.message || "Failed to update franchise");
         setIsDrawerOpen(true);
       } finally {
         setLoading(false);
+        setUploadProgress(null);
         setEditingId(null);
       }
     }
@@ -414,7 +470,7 @@ const Franchise: React.FC = () => {
           <div className="flex items-center justify-end sm:justify-center gap-2">
             <Button onClick={() => void fetchFranchises({ showErrorToast: true })} className="flex items-center gap-2">
               <RefreshCw className="w-4 h-4" />
-              {listLoading ? "Refreshing..." : "Refresh"}
+              {listLoading ? <><Spinner size={14} /> Refreshing...</> : "Refresh"}
             </Button>
 
             <Button onClick={openDrawerForCreate} className="flex items-center gap-2 ml-0 sm:ml-2 mt-2 sm:mt-0" aria-haspopup="dialog">
@@ -431,7 +487,10 @@ const Franchise: React.FC = () => {
         </CardHeader>
         <CardContent>
           {listLoading ? (
-            <div className="p-6 text-center text-sm text-gray-500">Loading franchises…</div>
+            <div className="p-6 text-center text-sm text-gray-500 flex flex-col items-center gap-3">
+              <Spinner />
+              <div>Loading franchises…</div>
+            </div>
           ) : listError ? (
             <div className="p-6 text-center text-sm text-red-600">
               {listError} — <button className="underline" onClick={() => void fetchFranchises()}>Retry</button>
@@ -580,15 +639,26 @@ const Franchise: React.FC = () => {
               </div>
 
               <div>
-                <label htmlFor="image" className="block text-sm font-medium text-gray-700">Image (optional)</label>
+                <label htmlFor="image" className="block text-sm font-medium text-gray-700">Image {editingId ? <span className="text-xs text-gray-400">(optional)</span> : <span className="text-xs text-red-500">(required)</span>}</label>
                 <input id="image" type="file" accept="image/*" onChange={handleFileChange} className="mt-1 block w-full text-sm text-gray-600" />
                 {form.imageFile && <p className="text-xs text-slate-500 mt-1">Selected: {form.imageFile.name}</p>}
+                {errors.imageFile && <p className="text-sm text-red-600 mt-1">{errors.imageFile}</p>}
+                {uploadProgress !== null && (
+                  <div className="mt-2">
+                    <div className="h-2 bg-gray-200 rounded overflow-hidden">
+                      <div style={{ width: `${uploadProgress}%` }} className="h-full bg-indigo-600 transition-all" />
+                    </div>
+                    <div className="text-xs text-slate-500 mt-1">{uploadProgress}%</div>
+                  </div>
+                )}
               </div>
             </div>
 
             <div className="sticky bottom-0 bg-white pt-4 mt-6 border-t flex items-center justify-end gap-3">
               <Button variant="ghost" onClick={closeDrawer} type="button">Cancel</Button>
-              <Button type="submit" disabled={loading}>{loading ? (editingId ? "Saving..." : "Adding...") : (editingId ? "Save Changes" : "Add Franchise")}</Button>
+              <Button type="submit" disabled={loading}>
+                {loading ? <span className="flex items-center gap-2"><Spinner /> {editingId ? "Saving..." : "Adding..."}</span> : (editingId ? "Save Changes" : "Add Franchise")}
+              </Button>
             </div>
           </form>
         </div>
@@ -598,7 +668,6 @@ const Franchise: React.FC = () => {
 };
 
 export default Franchise;
-
 
 
 

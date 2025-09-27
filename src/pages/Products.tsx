@@ -224,7 +224,6 @@ const Products: React.FC = () => {
       const normalized = rows.map((r) => normalizeProduct(r));
       setProducts(normalized);
     } catch (err: any) {
-      console.error("Failed to fetch products", err);
       toast.error("Failed to load products");
       setProducts([]);
     } finally {
@@ -241,7 +240,6 @@ const Products: React.FC = () => {
     if (payload.grams) fd.append("grams", String(payload.grams));
     if (payload.category) fd.append("category", String(payload.category));
     if (file) fd.append("image", file);
-
     const res = await api.post("/admin/products/add", fd, {
       headers: { "Content-Type": "multipart/form-data" },
     });
