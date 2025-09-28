@@ -82,9 +82,11 @@ const App = () => (
             <Route
               path="/dashboard"
               element={
+                 <ProtectedRoute>
                   <DashboardLayout>
                     <Dashboard />
                   </DashboardLayout>
+                  </ProtectedRoute>
               }
             />
             <Route

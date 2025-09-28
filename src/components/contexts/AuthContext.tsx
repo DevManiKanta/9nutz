@@ -508,7 +508,314 @@
 
 
 // src/context/AuthContext.tsx
+// "use client";
+// import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+// import api from "../../api/axios"; // adjust path if necessary
+
+// type User = {
+//   id?: number | string;
+//   username?: string;
+//   name?: string;
+//   role?: string;
+// } | null;
+
+// type AuthContextType = {
+//   user: User;
+//   isLoading: boolean;           // loading state while validating/refreshing
+//   isAuthenticated: boolean;     // convenience boolean
+//   login: (username: string, password: string) => Promise<User>;
+//   logout: () => void;
+//   refreshUserFromToken: () => Promise<User | null>;
+// };
+
+// const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// /**
+//  * Token key used in localStorage. Change if your backend uses another key.
+//  */
+// const TOKEN_KEY = "token";
+
+// /**
+//  * Helper: extract token from various server response shapes
+//  */
+// function extractTokenFromLoginResponse(data: any): string | null {
+//   if (!data) return null;
+//   const candidates = [
+//     data?.access_token,
+//     data?.accessToken,
+//     data?.token,
+//     data?.data?.access_token,
+//     data?.data?.token,
+//     data?.token_data?.access_token,
+//     data?.token_data?.token,
+//   ];
+//   for (const c of candidates) {
+//     if (!c) continue;
+//     if (typeof c === "string") return c;
+//     if (typeof c === "object") {
+//       if (c.token) return String(c.token);
+//       if (c.access_token) return String(c.access_token);
+//     }
+//   }
+//   return null;
+// }
+
+// /**
+//  * Helper: extract user from server response (common shapes).
+//  */
+// function extractUserFromResponse(data: any): User {
+//   if (!data) return null;
+//   const serverUser = data?.user ?? data?.admin ?? data?.data?.user ?? data?.data?.admin ?? null;
+//   if (serverUser) {
+//     return {
+//       id: serverUser.id ?? serverUser.user_id ?? serverUser._id,
+//       username: serverUser.username ?? serverUser.email,
+//       name: serverUser.name ?? serverUser.fullName,
+//       role: serverUser.role,
+//     };
+//   }
+//   // fallback: maybe the top-level contains user info
+//   return {
+//     id: data?.id,
+//     username: data?.username ?? data?.email,
+//     name: data?.name,
+//     role: data?.role,
+//   };
+// }
+
+// /**
+//  * Set axios default header (keeps requests simple)
+//  */
+// function setAxiosTokenHeader(token: string | null) {
+//   try {
+//     if (token) {
+//       (api.defaults.headers as any).common = { ...(api.defaults.headers as any).common, Authorization: `Bearer ${token}` };
+//     } else {
+//       if ((api.defaults.headers as any).common) delete (api.defaults.headers as any).common.Authorization;
+//     }
+//   } catch {
+//     // ignore
+//   }
+// }
+
+// export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+//   const [user, setUser] = useState<User>(null);
+//   const [isLoading, setIsLoading] = useState(true);
+//   const lastTokenRef = useRef<string | null>(null);
+
+//   // Save token + update axios header + track last token
+//   const saveToken = (token: string | null) => {
+//     try {
+//       if (token == null) localStorage.removeItem(TOKEN_KEY);
+//       else localStorage.setItem(TOKEN_KEY, token);
+//     } catch (e) {
+//       console.warn("localStorage write failed", e);
+//     }
+//     lastTokenRef.current = token;
+//     setAxiosTokenHeader(token);
+//   };
+
+//   const logout = () => {
+//     saveToken(null);
+//     setUser(null);
+//   };
+
+//   // login: call server, store token, set user
+//   const login = async (username: string, password: string): Promise<User> => {
+//     setIsLoading(true);
+//     try {
+//       const res = await api.post("/login", { username, password }, { headers: { Accept: "application/json" } });
+//       const data = res?.data ?? {};
+//       const token = extractTokenFromLoginResponse(data);
+//       if (!token) {
+//         // attempt fallback shapes
+//         throw new Error("No token returned from server");
+//       }
+//       saveToken(token);
+
+//       const u = extractUserFromResponse(data) ?? { username };
+//       setUser(u);
+//       return u;
+//     } catch (err: any) {
+//       // do not auto-logout here; login failed so ensure no token left behind
+//       saveToken(null);
+//       const message = err?.response?.data?.message ?? err?.message ?? "Login failed";
+//       throw new Error(message);
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+
+//   // refreshUserFromToken: validate token by calling server and return user object or null
+//   const refreshUserFromToken = async (): Promise<User | null> => {
+//     setIsLoading(true);
+//     try {
+//       let token: string | null = null;
+//       try {
+//         token = localStorage.getItem(TOKEN_KEY);
+//       } catch (e) {
+//         console.warn("localStorage read failed", e);
+//       }
+//       if (!token) {
+//         logout();
+//         return null;
+//       }
+//       // make sure axios header is set
+//       setAxiosTokenHeader(token);
+//       const res = await api.get("/login", { headers: { Accept: "application/json" } });
+//       const data = res?.data ?? null;
+//       const u = extractUserFromResponse(data);
+//       if (!u) {
+//         logout();
+//         return null;
+//       }
+//       setUser(u);
+//       return u;
+//     } catch (err) {
+//       // failed to validate token -> logout
+//       console.warn("refreshUserFromToken failed", err);
+//       logout();
+//       return null;
+//     } finally {
+//       setIsLoading(false);
+//     }
+//   };
+
+//   // mount: restore token from storage, set header and try to refresh user
+//   useEffect(() => {
+//     (async () => {
+//       setIsLoading(true);
+//       let token: string | null = null;
+//       try {
+//         token = localStorage.getItem(TOKEN_KEY);
+//       } catch (e) {
+//         console.warn("localStorage read failed", e);
+//       }
+//       lastTokenRef.current = token;
+//       setAxiosTokenHeader(token);
+
+//       if (!token) {
+//         // no token -> not authenticated
+//         setUser(null);
+//         setIsLoading(false);
+//         return;
+//       }
+
+//       try {
+//         const res = await api.get("/login", { headers: { Accept: "application/json" } });
+//         const u = extractUserFromResponse(res?.data ?? null);
+//         if (u) {
+//           setUser(u);
+//         } else {
+//           logout();
+//         }
+//       } catch (err) {
+//         // treat as invalid token
+//         console.warn("Token validation failed at mount", err);
+//         logout();
+//       } finally {
+//         setIsLoading(false);
+//       }
+//     })();
+//     // eslint-disable-next-line react-hooks/exhaustive-deps
+//   }, []);
+
+//   // listen storage events (other tabs)
+//   useEffect(() => {
+//     const onStorage = (ev: StorageEvent) => {
+//       if (ev.key !== TOKEN_KEY) return;
+//       const newToken = ev.newValue;
+//       lastTokenRef.current = newToken;
+//       setAxiosTokenHeader(newToken);
+//       if (!newToken) {
+//         setUser(null);
+//       } else {
+//         // try refresh with the new token
+//         (async () => {
+//           setIsLoading(true);
+//           try {
+//             const res = await api.get("/login", { headers: { Accept: "application/json" } });
+//             const u = extractUserFromResponse(res?.data ?? null);
+//             if (u) setUser(u);
+//             else {
+//               setUser(null);
+//               saveToken(null);
+//             }
+//           } catch (err) {
+//             console.warn("storage event refresh failed", err);
+//             setUser(null);
+//             saveToken(null);
+//           } finally {
+//             setIsLoading(false);
+//           }
+//         })();
+//       }
+//     };
+//     window.addEventListener("storage", onStorage);
+//     return () => window.removeEventListener("storage", onStorage);
+//   }, []);
+
+//   // polling fallback to detect token removal/changes in same tab
+//   useEffect(() => {
+//     const id = window.setInterval(() => {
+//       try {
+//         const current = localStorage.getItem(TOKEN_KEY);
+//         if (lastTokenRef.current && !current) {
+//           // token removed -> logout
+//           lastTokenRef.current = null;
+//           setUser(null);
+//           setAxiosTokenHeader(null);
+//         } else if (!lastTokenRef.current && current) {
+//           // added in same tab -> set header and try refresh
+//           lastTokenRef.current = current;
+//           setAxiosTokenHeader(current);
+//           (async () => {
+//             try {
+//               const res = await api.get("/login", { headers: { Accept: "application/json" } });
+//               const u = extractUserFromResponse(res?.data ?? null);
+//               if (u) setUser(u);
+//               else {
+//                 setUser(null);
+//                 saveToken(null);
+//               }
+//             } catch {
+//               setUser(null);
+//               saveToken(null);
+//             }
+//           })();
+//         } else if (current && lastTokenRef.current && current !== lastTokenRef.current) {
+//           lastTokenRef.current = current;
+//           setAxiosTokenHeader(current);
+//         }
+//       } catch {
+//         // ignore localStorage errors
+//       }
+//     }, 1000);
+//     return () => clearInterval(id);
+//   }, []);
+
+//   const value: AuthContextType = {
+//     user,
+//     isLoading,
+//     isAuthenticated: !!user,
+//     login,
+//     logout,
+//     refreshUserFromToken,
+//   };
+
+//   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+// };
+
+// export const useAuth = () => {
+//   const ctx = useContext(AuthContext);
+//   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+//   return ctx;
+// };
+
+
+
 "use client";
+
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import api from "../../api/axios"; // adjust path if necessary
 
@@ -521,23 +828,16 @@ type User = {
 
 type AuthContextType = {
   user: User;
-  isLoading: boolean;           // loading state while validating/refreshing
-  isAuthenticated: boolean;     // convenience boolean
+  isLoading: boolean;
+  isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<User>;
   logout: () => void;
   refreshUserFromToken: () => Promise<User | null>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-/**
- * Token key used in localStorage. Change if your backend uses another key.
- */
 const TOKEN_KEY = "token";
 
-/**
- * Helper: extract token from various server response shapes
- */
 function extractTokenFromLoginResponse(data: any): string | null {
   if (!data) return null;
   const candidates = [
@@ -560,9 +860,6 @@ function extractTokenFromLoginResponse(data: any): string | null {
   return null;
 }
 
-/**
- * Helper: extract user from server response (common shapes).
- */
 function extractUserFromResponse(data: any): User {
   if (!data) return null;
   const serverUser = data?.user ?? data?.admin ?? data?.data?.user ?? data?.data?.admin ?? null;
@@ -574,7 +871,6 @@ function extractUserFromResponse(data: any): User {
       role: serverUser.role,
     };
   }
-  // fallback: maybe the top-level contains user info
   return {
     id: data?.id,
     username: data?.username ?? data?.email,
@@ -583,19 +879,17 @@ function extractUserFromResponse(data: any): User {
   };
 }
 
-/**
- * Set axios default header (keeps requests simple)
- */
 function setAxiosTokenHeader(token: string | null) {
   try {
     if (token) {
-      (api.defaults.headers as any).common = { ...(api.defaults.headers as any).common, Authorization: `Bearer ${token}` };
+      (api.defaults.headers as any).common = {
+        ...(api.defaults.headers as any).common,
+        Authorization: `Bearer ${token}`,
+      };
     } else {
       if ((api.defaults.headers as any).common) delete (api.defaults.headers as any).common.Authorization;
     }
-  } catch {
-    // ignore
-  }
+  } catch {}
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -603,14 +897,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
   const lastTokenRef = useRef<string | null>(null);
 
-  // Save token + update axios header + track last token
+  // Save token + sync axios
   const saveToken = (token: string | null) => {
     try {
-      if (token == null) localStorage.removeItem(TOKEN_KEY);
+      if (!token) localStorage.removeItem(TOKEN_KEY);
       else localStorage.setItem(TOKEN_KEY, token);
-    } catch (e) {
-      console.warn("localStorage write failed", e);
-    }
+    } catch {}
     lastTokenRef.current = token;
     setAxiosTokenHeader(token);
   };
@@ -620,24 +912,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  // login: call server, store token, set user
   const login = async (username: string, password: string): Promise<User> => {
     setIsLoading(true);
     try {
       const res = await api.post("/login", { username, password }, { headers: { Accept: "application/json" } });
-      const data = res?.data ?? {};
-      const token = extractTokenFromLoginResponse(data);
-      if (!token) {
-        // attempt fallback shapes
-        throw new Error("No token returned from server");
-      }
+      const token = extractTokenFromLoginResponse(res?.data);
+      if (!token) throw new Error("No token returned from server");
       saveToken(token);
-
-      const u = extractUserFromResponse(data) ?? { username };
+      const u = extractUserFromResponse(res?.data) ?? { username };
       setUser(u);
       return u;
     } catch (err: any) {
-      // do not auto-logout here; login failed so ensure no token left behind
       saveToken(null);
       const message = err?.response?.data?.message ?? err?.message ?? "Login failed";
       throw new Error(message);
@@ -646,152 +931,51 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // refreshUserFromToken: validate token by calling server and return user object or null
   const refreshUserFromToken = async (): Promise<User | null> => {
     setIsLoading(true);
     try {
-      let token: string | null = null;
-      try {
-        token = localStorage.getItem(TOKEN_KEY);
-      } catch (e) {
-        console.warn("localStorage read failed", e);
-      }
-      if (!token) {
-        logout();
-        return null;
-      }
-      // make sure axios header is set
+      const token = localStorage.getItem(TOKEN_KEY);
+      if (!token) return null;
       setAxiosTokenHeader(token);
       const res = await api.get("/login", { headers: { Accept: "application/json" } });
-      const data = res?.data ?? null;
-      const u = extractUserFromResponse(data);
-      if (!u) {
-        logout();
-        return null;
-      }
+      const u = extractUserFromResponse(res?.data ?? null);
       setUser(u);
       return u;
-    } catch (err) {
-      // failed to validate token -> logout
-      console.warn("refreshUserFromToken failed", err);
-      logout();
-      return null;
+    } catch {
+      return null; // do NOT logout automatically
     } finally {
       setIsLoading(false);
     }
   };
 
-  // mount: restore token from storage, set header and try to refresh user
+  // Mount: restore token and optionally validate
   useEffect(() => {
     (async () => {
       setIsLoading(true);
       let token: string | null = null;
       try {
         token = localStorage.getItem(TOKEN_KEY);
-      } catch (e) {
-        console.warn("localStorage read failed", e);
-      }
+      } catch {}
       lastTokenRef.current = token;
       setAxiosTokenHeader(token);
 
       if (!token) {
-        // no token -> not authenticated
         setUser(null);
         setIsLoading(false);
         return;
       }
 
       try {
-        const res = await api.get("/login", { headers: { Accept: "application/json" } });
+        const res = await api.get("/login");
         const u = extractUserFromResponse(res?.data ?? null);
-        if (u) {
-          setUser(u);
-        } else {
-          logout();
-        }
-      } catch (err) {
-        // treat as invalid token
-        console.warn("Token validation failed at mount", err);
-        logout();
+        setUser(u);
+      } catch {
+        // keep token even if validation fails
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // listen storage events (other tabs)
-  useEffect(() => {
-    const onStorage = (ev: StorageEvent) => {
-      if (ev.key !== TOKEN_KEY) return;
-      const newToken = ev.newValue;
-      lastTokenRef.current = newToken;
-      setAxiosTokenHeader(newToken);
-      if (!newToken) {
-        setUser(null);
-      } else {
-        // try refresh with the new token
-        (async () => {
-          setIsLoading(true);
-          try {
-            const res = await api.get("/login", { headers: { Accept: "application/json" } });
-            const u = extractUserFromResponse(res?.data ?? null);
-            if (u) setUser(u);
-            else {
-              setUser(null);
-              saveToken(null);
-            }
-          } catch (err) {
-            console.warn("storage event refresh failed", err);
-            setUser(null);
-            saveToken(null);
-          } finally {
-            setIsLoading(false);
-          }
-        })();
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, []);
-
-  // polling fallback to detect token removal/changes in same tab
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      try {
-        const current = localStorage.getItem(TOKEN_KEY);
-        if (lastTokenRef.current && !current) {
-          // token removed -> logout
-          lastTokenRef.current = null;
-          setUser(null);
-          setAxiosTokenHeader(null);
-        } else if (!lastTokenRef.current && current) {
-          // added in same tab -> set header and try refresh
-          lastTokenRef.current = current;
-          setAxiosTokenHeader(current);
-          (async () => {
-            try {
-              const res = await api.get("/login", { headers: { Accept: "application/json" } });
-              const u = extractUserFromResponse(res?.data ?? null);
-              if (u) setUser(u);
-              else {
-                setUser(null);
-                saveToken(null);
-              }
-            } catch {
-              setUser(null);
-              saveToken(null);
-            }
-          })();
-        } else if (current && lastTokenRef.current && current !== lastTokenRef.current) {
-          lastTokenRef.current = current;
-          setAxiosTokenHeader(current);
-        }
-      } catch {
-        // ignore localStorage errors
-      }
-    }, 1000);
-    return () => clearInterval(id);
   }, []);
 
   const value: AuthContextType = {
@@ -811,9 +995,6 @@ export const useAuth = () => {
   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
   return ctx;
 };
-
-
-
 
 
 
