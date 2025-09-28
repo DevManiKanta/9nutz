@@ -60,8 +60,30 @@ import RentVehiclePaymentsList from "./pages/RentVehiclePaymentsList";
 import FranchiseRequests from "./pages/FranchiseRequests";
 import CommingSoon from "./pages/CommingSoon";
 import PublicRoute from "@/components/auth/ProtectedRoute";
+import { useAuth } from "@/components/contexts/AuthContext";
 import { Provider } from "react-redux";
 import { store } from "@/redux/store";
+
+
+
+
+
+import { Loader2 } from "lucide-react";
+
+// NEW: Create a wrapper to wait for auth restore
+const AuthLoader: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { isLoading } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="animate-spin w-10 h-10 text-black" />
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+};
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -74,7 +96,9 @@ const App = () => (
         <BrowserRouter>
           <Routes>
             <Route path="/login"  element={
+              // <PublicRoute>
             <LoginForm />
+            // </PublicRoute>
         } />
             {/* <Route path="/signup" element={<SignupForm />} /> */}
             <Route path="/forgot-password" element={<ForgotPasswordForm />} />
@@ -516,8 +540,7 @@ const App = () => (
                   </DashboardLayout>
                 </ProtectedRoute>
               }
-            />
-             <Route
+            />          <Route
               path="VehiclePayments/ConsolidatedVehiclePay"
               element={
                 <ProtectedRoute>
@@ -527,6 +550,7 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+   
              <Route
               path="/FranchiseRequests"
               element={
@@ -556,40 +580,6 @@ const App = () => (
 );
 
 export default App;
-// src/App.tsx
-// import React from "react";
-// import { BrowserRouter, Routes, Route } from "react-router-dom";
-// import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-// import { AuthProvider } from "../src/components/auth/";
-// import ProtectedRoute from "../src/components/auth/PublicRoute";
-// import PublicRoute from "../src/components/auth/PublicRoute";
-// import { LoginForm } from "./components/auth/LoginForm";
-// import { DashboardLayout } from "./layouts/DashboardLayout";
-// import Dashboard from "@/pages/Dashboard";
-// import Products from "@/pages/Products";
-// import NotFound from "@/pages/NotFound";
-// // ... import other pages/components
-
-// const queryClient = new QueryClient();
-
-// const App = () => (
-//   <QueryClientProvider client={queryClient}>
-//     <AuthProvider>
-//       <BrowserRouter>
-//         <Routes>
-//           <Route path="/login" element={<PublicRoute><LoginForm /></PublicRoute>} />
-//           <Route path="/" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
-//           <Route path="/dashboard" element={<ProtectedRoute><DashboardLayout><Dashboard /></DashboardLayout></ProtectedRoute>} />
-//           <Route path="/products" element={<ProtectedRoute><DashboardLayout><Products /></DashboardLayout></ProtectedRoute>} />
-//           {/* ... other protected routes */}
-//           <Route path="*" element={<ProtectedRoute><DashboardLayout><NotFound /></DashboardLayout></ProtectedRoute>} />
-//         </Routes>
-//       </BrowserRouter>
-//     </AuthProvider>
-//   </QueryClientProvider>
-// );
-
-// export default App;
 
 
 
