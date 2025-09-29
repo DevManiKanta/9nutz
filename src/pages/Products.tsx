@@ -1366,7 +1366,7 @@ export default function Products(): JSX.Element {
             <input
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search by id, name, price, grams or category"
+              placeholder="Search by name, price, grams or category"
               className="flex-1 sm:flex-none w-full sm:w-72 border rounded-md px-3 py-2 focus:ring focus:ring-indigo-200"
             />
 
@@ -1400,7 +1400,12 @@ export default function Products(): JSX.Element {
               {isLoading ? (
                 <tr>
                   <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                    Loading products...
+                  <div className="p-6 text-center">
+    <div className="flex flex-col items-center justify-center gap-2">
+      <div className="h-8 w-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin"></div>
+      <span className="text-sm text-slate-600">Loading...</span>
+    </div>
+  </div>
                   </td>
                 </tr>
               ) : filteredOnPage.length === 0 ? (
