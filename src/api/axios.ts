@@ -45,10 +45,9 @@
 // src/lib/axios.ts
 import axios, { AxiosError, AxiosInstance } from "axios";
 
-// CHANGE THIS to your API base if needed
-export const BASE_URL = "https://9nutsapi.nearbydoctors.in/public/api";
-// export const BASE_URL = "http://192.168.1.6:8001/api";
-
+// export const BASE_URL = "https://9nutsapi.nearbydoctors.in/public/api";
+export const BASE_URL = "http://192.168.29.100:8000/api";
+// export const BASE_URL = "http://192.168.29.100:8000/api";
 const api: AxiosInstance = axios.create({
   baseURL: BASE_URL,
   timeout: 30_000,

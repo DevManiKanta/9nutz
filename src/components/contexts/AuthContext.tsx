@@ -811,11 +811,6 @@
 //   if (!ctx) throw new Error("useAuth must be used within AuthProvider");
 //   return ctx;
 // };
-
-
-
-"use client";
-
 import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import api from "../../api/axios"; // adjust path if necessary
 
